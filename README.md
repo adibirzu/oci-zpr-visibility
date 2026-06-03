@@ -18,6 +18,24 @@ Primary Oracle references:
 * [VCN Flow Log details](https://docs.oracle.com/en-us/iaas/Content/Logging/Reference/details_for_vcn_flow_logs.htm)
 * [Connector Hub Terraform resource](https://registry.terraform.io/providers/oracle/oci/latest/docs/resources/sch_service_connector)
 
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for the end-to-end design:
+two ingestion paths (Python inventory/findings + VCN Flow Logs) converging in
+OCI Log Analytics through Connector Hub, the collector internals, the detection
+logic, and the IAM model.
+
+## Install
+
+Use an isolated virtual environment so the project's `oci>=2.176.0` does not
+collide with other tools (notably the OCI CLI, which pins its own SDK version):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/oci-zpr-visibility --help
+```
+
 ## Local demo
 
 ```bash
