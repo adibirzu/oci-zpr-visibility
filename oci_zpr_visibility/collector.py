@@ -81,7 +81,7 @@ class ZprCollector:
     def _safe_get_configuration(self) -> dict[str, Any] | None:
         zpr = client(self.session, "zpr.ZprClient")
         try:
-            return to_plain(zpr.get_configuration().data)
+            return to_plain(zpr.get_configuration(compartment_id=self.session.tenancy_id).data)
         except Exception as exc:  # OCI returns NotAuthorizedOrNotFound before ZPR onboarding in some tenancies.
             return {"error": exc.__class__.__name__, "message": str(exc)}
 
