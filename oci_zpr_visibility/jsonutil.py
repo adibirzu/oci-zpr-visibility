@@ -24,10 +24,12 @@ def to_plain(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [to_plain(v) for v in value]
     if hasattr(value, "__dict__"):
+        # OCI SDK models set swagger_types/attribute_map as instance attributes;
+        # these are serialization metadata, not record data, so drop them.
         return {
             k.lstrip("_"): to_plain(v)
             for k, v in vars(value).items()
-            if not callable(v) and not k.startswith("__")
+            if not callable(v) and not k.startswith("__") and k not in ("swagger_types", "attribute_map")
         }
     return str(value)
 
