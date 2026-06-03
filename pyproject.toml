@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oci-zpr-visibility"
+version = "0.1.0"
+description = "OCI Zero Trust Packet Routing visibility collector, flow correlator, and Log Analytics integration helpers."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "oci>=2.176.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+oci-zpr-visibility = "oci_zpr_visibility.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["oci_zpr_visibility*"]

@@ -1,0 +1,112 @@
+{
+  "snapshot_time": "2026-06-03T10:00:00Z",
+  "tenancy_id": "<TENANCY_OCID>",
+  "region": "eu-frankfurt-1",
+  "zpr_configuration": {
+    "zpr_status": "ENABLED",
+    "state": "ACTIVE"
+  },
+  "zpr_policies": [
+    {
+      "id": "<ZPR_POLICY_OCID>",
+      "name": "prod-web-to-db",
+      "lifecycle_state": "ACTIVE",
+      "statements": [
+        "in networks:prod allow apps:web endpoints to connect to apps:db endpoints"
+      ]
+    },
+    {
+      "id": "<ZPR_POLICY_BROAD_OCID>",
+      "name": "temporary-break-glass",
+      "lifecycle_state": "ACTIVE",
+      "statements": [
+        "allow apps:ops endpoints to connect to 0.0.0.0/0"
+      ]
+    }
+  ],
+  "security_attribute_namespaces": [
+    {
+      "id": "<SECATTR_NAMESPACE_APPS_OCID>",
+      "name": "apps",
+      "lifecycle_state": "ACTIVE"
+    }
+  ],
+  "security_attributes": [
+    {
+      "namespace_id": "<SECATTR_NAMESPACE_APPS_OCID>",
+      "namespace_name": "apps",
+      "name": "role",
+      "lifecycle_state": "ACTIVE"
+    }
+  ],
+  "resources": [
+    {
+      "resource_id": "<WEB_INSTANCE_OCID>",
+      "resource_name": "prod-web-01",
+      "resource_type": "instance",
+      "compartment_id": "<PROD_COMPARTMENT_OCID>",
+      "region": "eu-frankfurt-1",
+      "vnic_id": "<WEB_VNIC_OCID>",
+      "subnet_id": "<APP_SUBNET_OCID>",
+      "private_ip": "10.0.1.10",
+      "normalized_security_attributes": {
+        "apps.role": "web"
+      }
+    },
+    {
+      "resource_id": "<DB_RESOURCE_OCID>",
+      "resource_name": "prod-db-01",
+      "resource_type": "database",
+      "compartment_id": "<PROD_COMPARTMENT_OCID>",
+      "region": "eu-frankfurt-1",
+      "vnic_id": "<DB_VNIC_OCID>",
+      "subnet_id": "<DB_SUBNET_OCID>",
+      "private_ip": "10.0.2.20",
+      "normalized_security_attributes": {
+        "apps.role": "db"
+      }
+    },
+    {
+      "resource_id": "<PAYROLL_DB_OCID>",
+      "resource_name": "payroll-db",
+      "resource_type": "database",
+      "compartment_id": "<PROD_COMPARTMENT_OCID>",
+      "region": "eu-frankfurt-1",
+      "vnic_id": "<PAYROLL_DB_VNIC_OCID>",
+      "subnet_id": "<DB_SUBNET_OCID>",
+      "private_ip": "10.0.2.30",
+      "normalized_security_attributes": {
+        "apps.role": "payroll-db"
+      }
+    }
+  ],
+  "ip_resource_map": [
+    {
+      "private_ip": "10.0.1.10",
+      "resource_id": "<WEB_INSTANCE_OCID>",
+      "resource_name": "prod-web-01",
+      "resource_type": "instance",
+      "normalized_security_attributes": {
+        "apps.role": "web"
+      }
+    },
+    {
+      "private_ip": "10.0.2.20",
+      "resource_id": "<DB_RESOURCE_OCID>",
+      "resource_name": "prod-db-01",
+      "resource_type": "database",
+      "normalized_security_attributes": {
+        "apps.role": "db"
+      }
+    },
+    {
+      "private_ip": "10.0.2.30",
+      "resource_id": "<PAYROLL_DB_OCID>",
+      "resource_name": "payroll-db",
+      "resource_type": "database",
+      "normalized_security_attributes": {
+        "apps.role": "payroll-db"
+      }
+    }
+  ]
+}

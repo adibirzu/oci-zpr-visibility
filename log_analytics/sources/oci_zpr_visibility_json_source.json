@@ -1,0 +1,40 @@
+{
+  "name": "OCI ZPR Visibility JSON",
+  "description": "Custom JSON source for OCI ZPR policy statement, protected resource, finding, and enriched flow records emitted by oci-zpr-visibility.",
+  "parser": "json",
+  "timestampField": "snapshot_time",
+  "recordTypes": [
+    "zpr_policy_statement",
+    "zpr_resource",
+    "zpr_finding",
+    "zpr_enriched_flow"
+  ],
+  "fields": [
+    "record_type",
+    "snapshot_time",
+    "policy_id",
+    "policy_name",
+    "policy_lifecycle_state",
+    "statement",
+    "statement_hash",
+    "source_attribute",
+    "destination_attribute",
+    "network_scope",
+    "target_type",
+    "resource_id",
+    "resource_name",
+    "resource_type",
+    "private_ip",
+    "security_attributes",
+    "severity",
+    "finding_type",
+    "classification",
+    "action",
+    "source_ip",
+    "destination_ip",
+    "destination_port",
+    "protocol",
+    "zpr_destination",
+    "matched_expected_policy"
+  ]
+}

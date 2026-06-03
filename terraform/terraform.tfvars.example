@@ -1,0 +1,20 @@
+region                 = "eu-frankfurt-1"
+auth                   = "APIKey"
+config_file_profile    = "DEFAULT"
+tenancy_ocid           = "<TENANCY_OCID>"
+compartment_ocid       = "<OBSERVABILITY_COMPARTMENT_OCID>"
+log_analytics_namespace = "<LOG_ANALYTICS_NAMESPACE>"
+log_analytics_log_group_ocid = "<LOG_ANALYTICS_LOG_GROUP_OCID>"
+
+flow_log_targets = {
+  prod_vcn = {
+    resource_id  = "<PROD_VCN_OCID>"
+    category     = "vcn"
+    display_name = "zpr-prod-vcn-flow"
+  }
+  database_subnet = {
+    resource_id  = "<DATABASE_SUBNET_OCID>"
+    category     = "subnet"
+    display_name = "zpr-database-subnet-flow"
+  }
+}
