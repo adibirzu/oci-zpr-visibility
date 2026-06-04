@@ -156,6 +156,7 @@ _DELEGATED_SUBCOMMANDS = [
     ("validate-dashboards", "validate_dashboards", "Execute dashboard queries against live LA (HIT/MISS/ERROR)."),
     ("seed", "seed", "Create the 'app' security attribute and a real ZPR policy."),
     ("trigger", "trigger", "Generate flows exercising every detection classification."),
+    ("deploy-dashboard", "deploy_dashboard", "Build + import the OCI LA dashboard (--dry-run to preview)."),
 ]
 _DELEGATED_MODULES = {name: module for name, module, _help in _DELEGATED_SUBCOMMANDS}
 
