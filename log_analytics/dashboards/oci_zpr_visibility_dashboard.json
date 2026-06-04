@@ -68,7 +68,7 @@
         {
           "name": "Active ZPR policies",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state",
-          "visualization_type": "tile",
+          "visualization_type": "bar",
           "layout": {
             "width": 3,
             "height": 3
@@ -224,7 +224,7 @@
         {
           "name": "Rejected protected destinations",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | stats count as rejects by destination_resource_name, destination_ip, destination_port, protocol | sort -rejects",
-          "visualization_type": "link",
+          "visualization_type": "table",
           "layout": {
             "width": 12,
             "height": 6
@@ -266,7 +266,7 @@
         {
           "name": "Flow path link (src to dst)",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by source_resource_name, destination_resource_name, classification",
-          "visualization_type": "link",
+          "visualization_type": "table",
           "layout": {
             "width": 12,
             "height": 6

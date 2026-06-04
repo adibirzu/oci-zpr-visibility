@@ -78,6 +78,14 @@ def main(argv=None) -> int:
     p.add_argument("--out", default="out/cap/trigger_records.jsonl")
     args = p.parse_args(argv)
 
+    # Stamp records with the current time so they fall inside recent dashboard
+    # windows (l60m/l7d), not a fixed past date.
+    from .jsonutil import utc_now_iso
+    now = utc_now_iso()
+    SNAPSHOT["snapshot_time"] = now
+    for flow in FLOWS:
+        flow["data"].setdefault("time", now)
+
     policy_records = []
     for policy in SNAPSHOT["zpr_policies"]:
         policy_records.extend(policy_statement_records(policy, SNAPSHOT["snapshot_time"]))

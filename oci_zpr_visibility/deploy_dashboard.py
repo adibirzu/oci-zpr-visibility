@@ -37,7 +37,10 @@ def _saved_search(search_id, widget, compartment_id) -> dict:
         "scopeFilters": [],
         "showTitle": True,
         "timeSelection": DEFAULT_TIME_PERIOD,
-        "visualizationOptions": widget.get("visualization_options", {}),
+        # Push only an empty/clean viz-options object: the descriptor's
+        # severity_colors/classification_colors are design metadata, not valid OCI
+        # visualizationOptions keys, and feeding them to the renderer crashes it.
+        "visualizationOptions": {},
         "visualizationType": widget["visualization_type"],
         "vizType": "lxSavedSearchWidgetType",
     }
