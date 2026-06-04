@@ -27,6 +27,7 @@ Primary Oracle references:
 | [docs/api-cli-reference.md](docs/api-cli-reference.md) | OCI SDK operations, `oci` CLI commands, app CLI + scripts, Terraform resources |
 | [docs/runbook.md](docs/runbook.md) | Operator flow: deploy, collect, validate, IAM policies |
 | [docs/validation.md](docs/validation.md) | Live end-to-end validation results in cap (14/14 dashboards) |
+| [docs/orm-deployment.md](docs/orm-deployment.md) | One-click Oracle Resource Manager deployment (full lab + LA + dashboard) |
 | [ROADMAP.md](ROADMAP.md) | Long-term, phased enhancement plan |
 
 ## Architecture
@@ -57,6 +58,11 @@ Exposed via the main CLI (and as thin `scripts/*.py` shims for legacy paths):
 | `oci-zpr-visibility trigger` | Generate flows exercising every detection classification (offline trigger; production uses VCN Flow Logs). |
 | `oci-zpr-visibility provision-la` | Idempotently create LA custom fields, JSON parser, source, log group; `--upload` ingests records. |
 | `oci-zpr-visibility validate-dashboards` | Execute all dashboard queries against live LA (HIT/MISS/ERROR). |
+| `oci-zpr-visibility deploy-dashboard` | Build + import the OCI LA Management Dashboard (`--dry-run` to preview). |
+| `oci-zpr-visibility refresh` | Scheduled unit: collect → drift → upload → publish metrics. |
+
+For one-click provisioning of the whole lab + LA content + dashboard, use the
+**Oracle Resource Manager** stack — see [docs/orm-deployment.md](docs/orm-deployment.md).
 
 See [docs/api-cli-reference.md](docs/api-cli-reference.md) for the full surface
 and [docs/validation.md](docs/validation.md) for the end-to-end validation run.
