@@ -158,3 +158,34 @@ Allow any-user to {LOG_ANALYTICS_LOG_GROUP_UPLOAD_LOGS} in compartment <obs-comp
 * Review HIGH and CRITICAL findings daily.
 * Treat `unexpected_accepted` as a review queue, not as proof of a ZPR bypass.
 * Treat `suspected_misconfiguration` as a connectivity triage queue where a flow was rejected even though policy correlation expected it to be allowed.
+
+## Full ZPR enforcement demo (real protected resources + flows)
+
+`terraform/zpr-demo/` provisions a tagged VCN + two ZPR-tagged instances
+(app=web, app=db) that generate intra-VCN traffic (web→db allowed by policy,
+db→web denied by ZPR), plus subnet VCN Flow Logs.
+
+```bash
+# 1. Deploy the demo network + endpoints (own state; destroy independently)
+terraform -chdir=terraform/zpr-demo apply \
+  -var "compartment_ocid=<TENANCY_OCID>" \
+  -var "image_ocid=<OL9_IMAGE_OCID>" \
+  -var "availability_domain=<AD>"
+
+# 2. Collect real protected resources (VCN + 2 instances with IPs)
+oci-zpr-visibility collect --profile cap --region eu-frankfurt-1 \
+  --snapshot out/cap/snap.json --records out/cap/recs.jsonl
+oci-zpr-visibility provision-la --profile cap --region eu-frankfurt-1 --upload out/cap/recs.jsonl
+
+# 3. After flow logs populate (~5-15 min), correlate REAL flows and upload
+FLG=$(terraform -chdir=terraform/zpr-demo output -raw flow_log_group_ocid)
+FL=$(terraform -chdir=terraform/zpr-demo output -raw flow_log_ocid)
+oci-zpr-visibility correlate --profile cap --region eu-frankfurt-1 \
+  --snapshot out/cap/snap.json --flow-log-group-id "$FLG" --flow-log-id "$FL" \
+  --output out/cap/enriched.jsonl
+oci-zpr-visibility provision-la --profile cap --region eu-frankfurt-1 --upload out/cap/enriched.jsonl
+
+# 4. Tear down when done (instances are billable)
+terraform -chdir=terraform/zpr-demo destroy -var "compartment_ocid=<TENANCY_OCID>" \
+  -var "image_ocid=<OL9_IMAGE_OCID>" -var "availability_domain=<AD>"
+```
