@@ -14,6 +14,7 @@ from .correlate import correlate_flow_records
 from .findings import generate_findings
 from .jsonutil import read_json, read_jsonl, write_json, write_jsonl
 from .logging_ingestion import emit_records
+from .logutil import emit
 from .oci_clients import build_session
 from .policy_parser import policy_statement_records
 
@@ -26,7 +27,7 @@ def _session(args: argparse.Namespace) -> Any:
 def cmd_enable_zpr(args: argparse.Namespace) -> int:
     result = ZprCollector(_session(args)).enable_zpr(dry_run=args.dry_run)
     write_json(args.output, result)
-    print(f"Wrote ZPR enablement response to {args.output}")
+    emit({"output": args.output, "dry_run": args.dry_run}, f"Wrote ZPR enablement response to {args.output}", args.json)
     return 0
 
 
@@ -39,11 +40,17 @@ def cmd_collect(args: argparse.Namespace) -> int:
 
     write_json(args.snapshot, snapshot)
     write_jsonl(args.records, all_records)
+    emitted = None
     if args.emit_log_id:
         emitted = emit_records(_session(args), args.emit_log_id, all_records, args.batch_size)
-        print(f"Emitted {emitted} records to OCI Logging log {args.emit_log_id}")
-    print(f"Wrote snapshot to {args.snapshot}")
-    print(f"Wrote {len(all_records)} normalized records to {args.records}")
+    payload = {"snapshot": args.snapshot, "records": args.records,
+               "record_count": len(all_records), "emitted": emitted}
+    human = "\n".join(filter(None, [
+        f"Emitted {emitted} records to OCI Logging log {args.emit_log_id}" if emitted is not None else None,
+        f"Wrote snapshot to {args.snapshot}",
+        f"Wrote {len(all_records)} normalized records to {args.records}",
+    ]))
+    emit(payload, human, args.json)
     return 0
 
 
@@ -54,7 +61,8 @@ def cmd_findings(args: argparse.Namespace) -> int:
         policy_records.extend(policy_statement_records(policy, snapshot.get("snapshot_time", "")))
     findings = generate_findings(snapshot, policy_records)
     write_jsonl(args.output, findings)
-    print(f"Wrote {len(findings)} findings to {args.output}")
+    emit({"output": args.output, "finding_count": len(findings)},
+         f"Wrote {len(findings)} findings to {args.output}", args.json)
     return 0
 
 
@@ -66,14 +74,16 @@ def cmd_correlate(args: argparse.Namespace) -> int:
     flows = read_jsonl(args.flows)
     enriched = correlate_flow_records(flows, snapshot, policy_records)
     write_jsonl(args.output, enriched)
-    print(f"Wrote {len(enriched)} enriched flow records to {args.output}")
+    emit({"output": args.output, "enriched_count": len(enriched)},
+         f"Wrote {len(enriched)} enriched flow records to {args.output}", args.json)
     return 0
 
 
 def cmd_emit(args: argparse.Namespace) -> int:
     records = read_jsonl(args.records)
     emitted = emit_records(_session(args), args.log_id, records, args.batch_size)
-    print(f"Emitted {emitted} records to OCI Logging log {args.log_id}")
+    emit({"log_id": args.log_id, "emitted": emitted},
+         f"Emitted {emitted} records to OCI Logging log {args.log_id}", args.json)
     return 0
 
 
@@ -89,7 +99,9 @@ def cmd_demo(args: argparse.Namespace) -> int:
     write_json(root / "snapshot.json", snapshot)
     write_jsonl(root / "records.jsonl", [*policy_records, *findings])
     write_jsonl(root / "enriched_flows.jsonl", enriched)
-    print(f"Wrote demo outputs under {root}")
+    emit({"output_dir": str(root), "policy_records": len(policy_records),
+          "findings": len(findings), "enriched": len(enriched)},
+         f"Wrote demo outputs under {root}", args.json)
     return 0
 
 
@@ -98,6 +110,7 @@ def add_auth_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config-file", default=None)
     parser.add_argument("--profile", default="DEFAULT")
     parser.add_argument("--region", default=None)
+    parser.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -124,12 +137,14 @@ def build_parser() -> argparse.ArgumentParser:
     findings = sub.add_parser("findings", help="Generate findings from an existing snapshot.")
     findings.add_argument("--snapshot", required=True)
     findings.add_argument("--output", default="out/zpr_findings.jsonl")
+    findings.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
     findings.set_defaults(func=cmd_findings)
 
     correlate = sub.add_parser("correlate", help="Correlate JSONL VCN flow logs with a ZPR snapshot.")
     correlate.add_argument("--snapshot", required=True)
     correlate.add_argument("--flows", required=True)
     correlate.add_argument("--output", default="out/zpr_enriched_flows.jsonl")
+    correlate.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
     correlate.set_defaults(func=cmd_correlate)
 
     emit = sub.add_parser("emit", help="Emit normalized JSONL records to an OCI custom log.")
@@ -141,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     demo = sub.add_parser("demo", help="Run local sample data through findings and correlation.")
     demo.add_argument("--output-dir", default="out/demo")
+    demo.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
     demo.set_defaults(func=cmd_demo)
 
     # Consolidated operational subcommands are listed here for `--help`, but are
