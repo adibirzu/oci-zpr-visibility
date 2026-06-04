@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 out/
 *.log
+*.egg-info/
 
 .terraform/
 *.tfstate
