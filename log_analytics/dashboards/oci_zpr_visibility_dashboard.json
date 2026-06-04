@@ -12,7 +12,8 @@
           "layout": {
             "width": 2,
             "height": 2
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "KPI: Protected resources",
@@ -21,7 +22,8 @@
           "layout": {
             "width": 2,
             "height": 2
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "KPI: Critical+High findings",
@@ -30,7 +32,18 @@
           "layout": {
             "width": 3,
             "height": 2
-          }
+          },
+          "visualization_options": {
+            "severity_colors": {
+              "CRITICAL": "#C74634",
+              "HIGH": "#E8730C",
+              "MEDIUM": "#F5C344",
+              "LOW": "#8A8A8A"
+            }
+          },
+          "ask_ai_prompts": [
+            "List the open CRITICAL and HIGH findings and their resources."
+          ]
         },
         {
           "name": "KPI: Blocked flows",
@@ -39,7 +52,8 @@
           "layout": {
             "width": 2,
             "height": 2
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "KPI: Unexpected accepted",
@@ -48,7 +62,8 @@
           "layout": {
             "width": 3,
             "height": 2
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Active ZPR policies",
@@ -57,7 +72,8 @@
           "layout": {
             "width": 3,
             "height": 3
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Protected resources",
@@ -66,7 +82,8 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Top findings",
@@ -75,7 +92,18 @@
           "layout": {
             "width": 6,
             "height": 6
-          }
+          },
+          "visualization_options": {
+            "severity_colors": {
+              "CRITICAL": "#C74634",
+              "HIGH": "#E8730C",
+              "MEDIUM": "#F5C344",
+              "LOW": "#8A8A8A"
+            }
+          },
+          "ask_ai_prompts": [
+            "Which finding types and severities dominate, and which resources drive them?"
+          ]
         }
       ]
     },
@@ -89,7 +117,8 @@
           "layout": {
             "width": 12,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Source destination matrix",
@@ -98,7 +127,8 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Broad CIDR exceptions",
@@ -107,7 +137,18 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {
+            "severity_colors": {
+              "CRITICAL": "#C74634",
+              "HIGH": "#E8730C",
+              "MEDIUM": "#F5C344",
+              "LOW": "#8A8A8A"
+            }
+          },
+          "ask_ai_prompts": [
+            "Which policies allow overly broad CIDR ranges?"
+          ]
         },
         {
           "name": "Policy relationship sunburst",
@@ -116,7 +157,8 @@
           "layout": {
             "width": 6,
             "height": 6
-          }
+          },
+          "visualization_options": {}
         }
       ]
     },
@@ -130,7 +172,8 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Resources by subnet",
@@ -139,7 +182,8 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Resource detail",
@@ -148,7 +192,8 @@
           "layout": {
             "width": 12,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         }
       ]
     },
@@ -162,7 +207,19 @@
           "layout": {
             "width": 6,
             "height": 5
-          }
+          },
+          "visualization_options": {
+            "classification_colors": {
+              "expected_accepted": "#3A8745",
+              "expected_blocked": "#8A8A8A",
+              "unexpected_accepted": "#C74634",
+              "suspected_misconfiguration": "#E8730C",
+              "needs_enrichment": "#5B6770"
+            }
+          },
+          "ask_ai_prompts": [
+            "Break down flows by action and classification over time."
+          ]
         },
         {
           "name": "Rejected protected destinations",
@@ -171,7 +228,19 @@
           "layout": {
             "width": 12,
             "height": 6
-          }
+          },
+          "visualization_options": {
+            "classification_colors": {
+              "expected_accepted": "#3A8745",
+              "expected_blocked": "#8A8A8A",
+              "unexpected_accepted": "#C74634",
+              "suspected_misconfiguration": "#E8730C",
+              "needs_enrichment": "#5B6770"
+            }
+          },
+          "ask_ai_prompts": [
+            "Which rejected flows targeted ZPR-protected destinations?"
+          ]
         },
         {
           "name": "Unexpected accepted flows",
@@ -180,7 +249,19 @@
           "layout": {
             "width": 12,
             "height": 6
-          }
+          },
+          "visualization_options": {
+            "classification_colors": {
+              "expected_accepted": "#3A8745",
+              "expected_blocked": "#8A8A8A",
+              "unexpected_accepted": "#C74634",
+              "suspected_misconfiguration": "#E8730C",
+              "needs_enrichment": "#5B6770"
+            }
+          },
+          "ask_ai_prompts": [
+            "Which accepted flows lack an expected ZPR policy?"
+          ]
         },
         {
           "name": "Flow path link (src to dst)",
@@ -189,7 +270,19 @@
           "layout": {
             "width": 12,
             "height": 6
-          }
+          },
+          "visualization_options": {
+            "classification_colors": {
+              "expected_accepted": "#3A8745",
+              "expected_blocked": "#8A8A8A",
+              "unexpected_accepted": "#C74634",
+              "suspected_misconfiguration": "#E8730C",
+              "needs_enrichment": "#5B6770"
+            }
+          },
+          "ask_ai_prompts": [
+            "Trace flows from source to destination by classification."
+          ]
         }
       ]
     },
@@ -203,7 +296,8 @@
           "layout": {
             "width": 12,
             "height": 5
-          }
+          },
+          "visualization_options": {}
         },
         {
           "name": "Missing policy findings",
@@ -212,7 +306,18 @@
           "layout": {
             "width": 12,
             "height": 5
-          }
+          },
+          "visualization_options": {
+            "severity_colors": {
+              "CRITICAL": "#C74634",
+              "HIGH": "#E8730C",
+              "MEDIUM": "#F5C344",
+              "LOW": "#8A8A8A"
+            }
+          },
+          "ask_ai_prompts": [
+            "Which protected resources have no matching ZPR policy?"
+          ]
         }
       ]
     }
