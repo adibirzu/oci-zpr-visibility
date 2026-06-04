@@ -30,6 +30,7 @@ subcommands and as thin `scripts/*.py` shims (legacy paths kept working).
 | `trigger` | `scripts/trigger_rules.py` | Generate flows exercising every detection classification | — (local) |
 | `provision-la` | `scripts/provision_la.py` | Create LA fields/parser/source/log group; `--upload` ingests records | `LogAnalyticsClient.upsert_field/upsert_parser/upsert_source/create_log_analytics_log_group/upload_log_file` |
 | `validate-dashboards` | `scripts/validate_dashboards.py` | Execute all dashboard queries; report HIT/MISS/ERROR | `LogAnalyticsClient.query` |
+| `deploy-dashboard` | `scripts/deploy_dashboard.py` | Build + import the OCI LA Management Dashboard (21 tiles); `--dry-run` previews | `DashxApisClient.import_dashboard/list/delete` |
 
 Subcommands route before argparse so flags pass through to each module's own
 parser, e.g. `oci-zpr-visibility provision-la --profile cap --upload recs.jsonl`.
@@ -92,4 +93,4 @@ Outputs: `logging_log_group_ocid`, `flow_log_ocids`,
 - Source `OCI ZPR Visibility JSON` (`type_name="os_file"`).
 - Log group `zpr-visibility-la`.
 - Dashboard catalog: `log_analytics/dashboards/oci_zpr_visibility_dashboard.json`
-  (5 tabs / 14 widgets).
+  (5 tabs / 21 widgets).

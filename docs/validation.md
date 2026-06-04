@@ -29,7 +29,7 @@ live only in the gitignored `terraform/terraform.tfvars` and the tenancy.
 3. `trigger_rules.py` produces flows covering every classification.
 4. `provision_la.py` creates the LA custom fields, JSON parser, source
    (`OCI ZPR Visibility JSON`), and log group, then `--upload` ingests the records.
-5. `validate_dashboards.py` executes all 14 dashboard queries → **14/14 HIT**.
+5. `validate_dashboards.py` executes all 21 dashboard queries → **21/21 HIT**.
 
 ## OCI Log Analytics — solved recipe (was the blocker)
 
@@ -67,7 +67,8 @@ terraform -chdir=terraform apply                          # logging layer
 .venv/bin/python scripts/trigger_rules.py   --out out/cap/trigger_records.jsonl
 cat out/cap/zpr_records.jsonl out/cap/trigger_records.jsonl > out/cap/all_records.jsonl
 .venv/bin/python scripts/provision_la.py    --profile cap --region eu-frankfurt-1 --upload out/cap/all_records.jsonl
-.venv/bin/python scripts/validate_dashboards.py --profile cap --region eu-frankfurt-1   # expect 14/14 HIT
+.venv/bin/oci-zpr-visibility validate-dashboards --profile cap --region eu-frankfurt-1   # expect 21/21 HIT
+.venv/bin/oci-zpr-visibility deploy-dashboard    --profile cap --region eu-frankfurt-1   # import to OCI LA
 ```
 
 ## Continuous production path (scheduled Upload API)

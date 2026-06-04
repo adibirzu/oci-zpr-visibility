@@ -118,6 +118,20 @@ oci log-analytics query parse --namespace-name "$NS" --sub-system LOG \
 See [validation.md](validation.md) for the current validation status and the
 exact remaining LA content gap.
 
+## Deploy the dashboard
+
+Build and import the OCI LA Management Dashboard (21 tiles) from the descriptor:
+
+```bash
+oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --dry-run   # preview tiles
+oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION>            # import (idempotent)
+oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm all HIT
+```
+
+The dashboard appears under Log Analytics → Dashboards as "OCI ZPR Visibility".
+Re-running deletes the prior same-name dashboard and re-imports (safe to repeat).
+
+
 ## IAM (least privilege)
 
 Collector principal (group or dynamic group `zpr-collector`):

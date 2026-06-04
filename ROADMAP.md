@@ -18,6 +18,8 @@ Status legend: ✅ done · 🔜 next · 📋 planned · 💡 idea
 
 ## Phase 1 — Hardening & DX (🔜 next)
 
+- ✅ **Dashboard enhancement** — native OCI LA dashboard: 21 widgets (KPI tiles, severity sunburst, flow link), color semantics, drill-downs, and `deploy-dashboard` one-command import. Live 21/21 HIT.
+
 Goal: production-quality reliability and contributor onboarding.
 
 1. ✅ **CLI consolidation** — `provision_la.py`, `validate_dashboards.py`,
