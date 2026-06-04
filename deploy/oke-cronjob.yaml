@@ -1,0 +1,28 @@
+# Schedules the ZPR visibility refresh every 15 minutes on OKE.
+# Auth: prefer Workload Identity / resource principal (--auth resource_principal)
+# so no API keys are mounted. The pod's dynamic group needs read on ZPR/Security
+# Attributes/Resource Search/Core and manage on the LA log group + state bucket.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: zpr-visibility-refresh
+  namespace: zpr-visibility
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: refresh
+              image: <OCIR_REGION>.ocir.io/<OCIR_TENANCY>/oci-zpr-visibility:latest
+              args:
+                - "--auth=resource_principal"
+                - "--region=<REGION>"
+                - "--state-bucket=zpr-visibility-state"
+              resources:
+                requests: {cpu: "100m", memory: "256Mi"}
+                limits: {cpu: "500m", memory: "512Mi"}

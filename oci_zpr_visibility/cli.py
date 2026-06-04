@@ -175,6 +175,7 @@ _DELEGATED_SUBCOMMANDS = [
     ("seed", "seed", "Create the 'app' security attribute and a real ZPR policy."),
     ("trigger", "trigger", "Generate flows exercising every detection classification."),
     ("deploy-dashboard", "deploy_dashboard", "Build + import the OCI LA dashboard (--dry-run to preview)."),
+    ("refresh", "refresh", "Scheduled unit: collect -> drift -> upload to Log Analytics."),
 ]
 _DELEGATED_MODULES = {name: module for name, module, _help in _DELEGATED_SUBCOMMANDS}
 
