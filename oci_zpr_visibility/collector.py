@@ -14,6 +14,40 @@ def _list_all(oci: Any, func: Any, *args: Any, **kwargs: Any) -> list[Any]:
     return list(oci.pagination.list_call_get_all_results(func, *args, **kwargs).data)
 
 
+def protected_resource_record(
+    security_attributes: Any,
+    *,
+    resource_id: str | None,
+    resource_name: str | None,
+    resource_type: str,
+    compartment_id: str | None,
+    region: str | None,
+    vcn_id: str | None = None,
+    subnet_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a zpr_resource-shaped record from a resource's security attributes.
+
+    Returns None when the resource carries no security attributes (not protected).
+    """
+    attrs = flatten_security_attributes(security_attributes)
+    if not attrs:
+        return None
+    record: dict[str, Any] = {
+        "resource_id": resource_id,
+        "resource_name": resource_name,
+        "resource_type": resource_type,
+        "compartment_id": compartment_id,
+        "region": region,
+        "security_attributes": security_attributes,
+        "normalized_security_attributes": attrs,
+    }
+    if vcn_id:
+        record["vcn_id"] = vcn_id
+    if subnet_id:
+        record["subnet_id"] = subnet_id
+    return record
+
+
 class ZprCollector:
     def __init__(self, session: OciSession) -> None:
         self.session = session
@@ -119,31 +153,56 @@ class ZprCollector:
                 attribute_records.append(record)
         return namespace_records, attribute_records
 
+    def _compartment_ids(self) -> list[str]:
+        """Tenancy root + all ACTIVE subtree compartments (best-effort)."""
+        ids = [self.session.tenancy_id]
+        try:
+            identity = client(self.session, "identity.IdentityClient")
+            ids += [
+                c.id
+                for c in _list_all(
+                    self.oci, identity.list_compartments, self.session.tenancy_id,
+                    compartment_id_in_subtree=True, access_level="ANY", lifecycle_state="ACTIVE",
+                )
+            ]
+        except Exception:
+            pass
+        return ids
+
     def _collect_resources(self, query: str | None) -> list[dict[str, Any]]:
-        search = client(self.session, "resource_search.ResourceSearchClient")
-        details = self.oci.resource_search.models.StructuredSearchDetails(
-            type="Structured",
-            query=query or "query all resources",
-            matching_context_type="NONE",
-        )
-        response = search.search_resources(details)
+        """Enumerate ZPR-protectable resources (VCNs, instances) via Core APIs.
+
+        Resource Search does not return securityAttributes, so the previous
+        search-based discovery always found zero protected resources. Core
+        list_vcns / list_instances DO return security_attributes.
+        """
+        net = client(self.session, "core.VirtualNetworkClient")
+        compute = client(self.session, "core.ComputeClient")
+        region = self.session.region
         resources: list[dict[str, Any]] = []
-        for item in response.data.items:
-            plain = to_plain(item)
-            attrs = flatten_security_attributes(plain.get("security_attributes") or plain.get("securityAttributes"))
-            if not attrs:
-                continue
-            resources.append(
-                {
-                    "resource_id": plain.get("identifier") or plain.get("id"),
-                    "resource_name": plain.get("display_name") or plain.get("displayName"),
-                    "resource_type": plain.get("resource_type") or plain.get("resourceType"),
-                    "compartment_id": plain.get("compartment_id") or plain.get("compartmentId"),
-                    "region": plain.get("region") or self.session.region,
-                    "security_attributes": plain.get("security_attributes") or plain.get("securityAttributes"),
-                    "normalized_security_attributes": attrs,
-                }
-            )
+        for cid in self._compartment_ids():
+            try:
+                for vcn in _list_all(self.oci, net.list_vcns, cid):
+                    rec = protected_resource_record(
+                        getattr(vcn, "security_attributes", None),
+                        resource_id=vcn.id, resource_name=vcn.display_name, resource_type="Vcn",
+                        compartment_id=cid, region=region, vcn_id=vcn.id,
+                    )
+                    if rec:
+                        resources.append(rec)
+            except Exception:
+                pass
+            try:
+                for inst in _list_all(self.oci, compute.list_instances, cid):
+                    rec = protected_resource_record(
+                        getattr(inst, "security_attributes", None),
+                        resource_id=inst.id, resource_name=inst.display_name, resource_type="instance",
+                        compartment_id=cid, region=region,
+                    )
+                    if rec:
+                        resources.append(rec)
+            except Exception:
+                pass
         return self._enrich_compute_vnics(resources)
 
     def _enrich_compute_vnics(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
