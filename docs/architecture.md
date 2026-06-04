@@ -49,14 +49,18 @@ values from your tenancy; never inline them in committed files.
 
 There are two independent ingestion paths that converge in Log Analytics:
 
-| Path | Producer | OCI Logging log | Connector | LA source |
-|------|----------|-----------------|-----------|-----------|
-| **Inventory / findings** | `oci-zpr-visibility collect`/`emit` (Python) | `zpr-inventory` (CUSTOM) | `zpr-inventory-to-log-analytics` | `OCI ZPR Visibility JSON` (custom) |
-| **Network traffic** | OCI VCN Flow Logs (service) | `zpr-flow-*` (SERVICE) | `zpr-flow-logs-to-log-analytics` | `OCI VCN Flow Unified Schema Logs` (built-in) |
+| Path | Producer | Ingestion into LA | LA source |
+|------|----------|-------------------|-----------|
+| **Inventory / findings** | `oci-zpr-visibility collect` → `provision_la.py --upload` (Python) | **LA Upload API** (to the custom source) | `OCI ZPR Visibility JSON` (custom) |
+| **Network traffic** | OCI VCN Flow Logs (service) | OCI Logging → Connector Hub → LA | `OCI VCN Flow Unified Schema Logs` (built-in) |
 
-The collector also performs **local correlation** (`correlate`) joining exported
-flow JSONL with the ZPR snapshot when a fully managed connector path is not
-desired; those `zpr_enriched_flow` records are emitted on the inventory path.
+The inventory/findings path ingests via the **LA Upload API**, not Connector
+Hub: a logging-source connector to a LoggingAnalytics target requires a null
+`logSourceIdentifier` and cannot target a custom source, so it would not feed the
+custom-source dashboards. Connector Hub is used for VCN Flow Logs (built-in
+source). The collector also performs **local correlation** (`correlate`) joining
+exported flow JSONL with the ZPR snapshot; those `zpr_enriched_flow` records are
+emitted on the inventory path.
 
 ## 3. Collector internals (`oci_zpr_visibility`)
 

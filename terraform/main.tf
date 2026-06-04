@@ -95,6 +95,12 @@ resource "oci_sch_service_connector" "flow_logs_to_log_analytics" {
   }
 }
 
+# NOTE: A logging-source Connector Hub connector to a LoggingAnalytics target
+# requires logSourceIdentifier to be null and lands records under LA's built-in
+# OCI-logs handling, NOT a custom source. The ZPR inventory dashboards filter on
+# the custom `OCI ZPR Visibility JSON` source, so the validated path is the LA
+# Upload API (scripts/provision_la.py --upload), not this connector. Leave
+# create_log_analytics_connector=false for the inventory path. See docs/validation.md.
 resource "oci_sch_service_connector" "zpr_inventory_to_log_analytics" {
   count          = local.create_zpr_inventory_connector ? 1 : 0
   compartment_id = var.compartment_ocid

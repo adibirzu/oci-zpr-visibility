@@ -70,11 +70,23 @@ cat out/cap/zpr_records.jsonl out/cap/trigger_records.jsonl > out/cap/all_record
 .venv/bin/python scripts/validate_dashboards.py --profile cap --region eu-frankfurt-1   # expect 14/14 HIT
 ```
 
-## Continuous production path (Connector Hub)
+## Continuous production path (scheduled Upload API)
 
-For continuous ingestion instead of `--upload`, enable the connector in
-`terraform/terraform.tfvars` (`create_log_analytics_connector=true` +
-`log_analytics_namespace` + `log_analytics_log_group_ocid` +
-`zpr_inventory_log_analytics_source_identifier="OCI ZPR Visibility JSON"`) and
-`terraform apply`; the collector then runs on a schedule emitting to the
-`zpr-inventory` custom log, which Connector Hub forwards to LA.
+The validated continuous path is to schedule the collector + LA upload (cron /
+OCI Functions / OKE CronJob):
+
+```bash
+oci-zpr-visibility collect --auth instance_principal --region <REGION> \
+    --snapshot /tmp/snap.json --records /tmp/recs.jsonl
+python scripts/provision_la.py --upload /tmp/recs.jsonl   # idempotent provision + ingest
+```
+
+**Connector Hub does NOT fit the custom-source dashboards** (discovered live):
+a `logging`-source Connector Hub connector to a LoggingAnalytics target requires
+`logSourceIdentifier` to be null — it cannot target a custom source, so OCI
+Logging records land under LA's built-in OCI-logs handling, not under
+`OCI ZPR Visibility JSON`, and the dashboards (which filter on that source) would
+not match. Therefore `create_log_analytics_connector` is left `false` for the
+ZPR inventory path; ingest to the custom source via the Upload API instead.
+(Connector Hub remains appropriate for VCN Flow Logs, which use the built-in
+`OCI VCN Flow Unified Schema Logs` source.)
