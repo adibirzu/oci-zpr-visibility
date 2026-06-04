@@ -48,18 +48,11 @@ resource "oci_identity_policy" "controller" {
   compartment_id = var.tenancy_ocid
   name           = "${local.name_prefix}-controller-policy"
   description    = "Grants the ZPR visibility controller the access it needs"
+  # Lab grant: broad but valid. For production, scope to:
+  #   manage loganalytics-features-family, manage management-dashboard-family,
+  #   read zpr-policy, read security-attribute-namespaces, read virtual-network-family,
+  #   read instance-family, read compartments, manage objects (state/pkg buckets), use metrics.
   statements = [
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage log-analytics-features-family in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage loganalytics-log-group in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage management-dashboard-family in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read zpr-family in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read security-attribute-namespaces in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read virtual-network-family in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read instance-family in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read compartments in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage objects in compartment id ${var.compartment_ocid}",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read buckets in compartment id ${var.compartment_ocid}",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to use metrics in tenancy",
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to read loganalytics-features-family in tenancy",
+    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage all-resources in tenancy",
   ]
 }
