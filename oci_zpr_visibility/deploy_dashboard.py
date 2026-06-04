@@ -27,20 +27,14 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def _scope_filters(compartment_id: str) -> list[dict]:
-    return [{
-        "field": "Compartment OCID",
-        "fieldname": "Compartment OCID",
-        "isAdvanced": False,
-        "values": [compartment_id],
-    }]
-
-
 def _saved_search(search_id, widget, compartment_id) -> dict:
+    # No scopeFilters: the Upload-API source has no "Compartment OCID" record
+    # field, so a compartment scope filter makes every query invalid ("No data").
+    # The widget query already scopes by 'Log Source'.
     ui = {
         "enableWidgetInApp": True,
         "queryString": widget["query"],
-        "scopeFilters": _scope_filters(compartment_id),
+        "scopeFilters": [],
         "showTitle": True,
         "timeSelection": DEFAULT_TIME_PERIOD,
         "visualizationOptions": widget.get("visualization_options", {}),
@@ -92,6 +86,11 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
             "width": p["width"], "height": p["height"],
             "nls": {}, "uiConfig": {}, "dataConfig": [],
             "state": "DEFAULT", "drilldownConfig": [],
+            "parametersMap": {
+                "log-analytics-entity": "$(dashboard.params.log-analytics-entity-filter)",
+                "log-analytics-log-group-compartment": "$(dashboard.params.log-analytics-loggroup-filter)",
+                "time": "$(dashboard.params.time)",
+            },
         })
         saved.append(_saved_search(sid, w, compartment_id))
     return {
@@ -114,6 +113,10 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
         "screenImage": " ",
         "freeformTags": {"platform": "oci-zpr-visibility"},
         "parametersConfig": [
+            {"paramName": "log-analytics-loggroup-filter", "displayName": "Log Group Compartment",
+             "paramType": "LogAnalyticsLogGroupCompartment", "defaultValue": compartment_id, "isRequired": False},
+            {"paramName": "log-analytics-entity-filter", "displayName": "Entity",
+             "paramType": "LogAnalyticsEntity", "defaultValue": "", "isRequired": False},
             {"paramName": "time", "displayName": "Time Range", "paramType": "Time",
              "defaultValue": "P30D", "isRequired": False},
         ],
