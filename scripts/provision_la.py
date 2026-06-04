@@ -11,18 +11,29 @@ Usage:
   .venv/bin/python scripts/provision_la.py --profile cap --region eu-frankfurt-1 \
       --log-group-name zpr-visibility-la
 
-OCI Log Analytics modeling notes (reverse-engineered from built-in parsers):
+With --upload <file.jsonl>, also ingests records into LA via the Upload API
+under the source (the fast path used for end-to-end validation; Connector Hub
+is the continuous production path).
+
+OCI Log Analytics modeling notes (verified live in cap):
   * upsert_field with no `name` CREATES and auto-generates an internal name
     (udfsNN). Passing `name` means UPDATE and fails with "Field not found".
+  * Reuse an existing field (system or custom) by case-insensitive display name
+    before creating a new one (LA display names are case-insensitive-unique).
   * Queries reference a custom field by its display name, not the udfs name.
-  * A JSON parser field map sets structured_column_info = "$.<jsonKey>" and
-    points `field` at the LA field by its internal name.
+  * A JSON parser REQUIRES is_single_line_content=False WITH header_content="$:0"
+    plus language/encoding/is_default; single_line=True returns HTTP 500.
+    Field maps set structured_column_info="$.<jsonKey>" and point `field` at the
+    LA field by internal name.
+  * The source uses type_name="os_file"; find an existing source by display name
+    before upserting (OCI sets the source iname to the display name).
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 import oci
 
@@ -122,28 +133,68 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
             )
         )
         seq += 1
+    # JSON parser config that OCI LA accepts: is_single_line_content=False WITH
+    # header_content="$:0" (single_line=True returns HTTP 500). language/encoding/
+    # is_default are required for a clean upsert. Field maps reference the field by
+    # internal name only.
     details = m.UpsertLogAnalyticsParserDetails(
         name=PARSER_NAME, display_name=PARSER_DISPLAY_NAME,
         description="Parses OCI ZPR visibility JSON records.",
-        type="JSON", is_single_line_content=True,
+        type="JSON", language="en_US", encoding="UTF-8", is_default=True,
+        is_single_line_content=False, is_system=False, header_content="$:0",
         content=SAMPLE_CONTENT, example_content=SAMPLE_CONTENT,
         field_maps=maps,
     )
-    la.upsert_parser(namespace_name=ns, upsert_log_analytics_parser_details=details)
+    etag = None
+    try:
+        etag = la.get_parser(namespace_name=ns, parser_name=PARSER_NAME).headers.get("etag")
+    except oci.exceptions.ServiceError:
+        pass
+    kwargs = {"if_match": etag} if etag else {}
+    la.upsert_parser(namespace_name=ns, upsert_log_analytics_parser_details=details, **kwargs)
     print(f"parser ready: {PARSER_NAME} ({len(maps)} field maps)")
     return PARSER_NAME
 
 
-def ensure_source(la, ns, parser_name: str) -> str:
+def _find_source(la, ns, cfg):
+    """Return an existing source matching our display/internal name, else None."""
+    page = None
+    while True:
+        kwargs = {"limit": 1000, "is_system": "ALL"}
+        if page:
+            kwargs["page"] = page
+        resp = la.list_sources(namespace_name=ns, compartment_id=cfg["tenancy"], **kwargs)
+        for src in resp.data.items:
+            if src.name in (SOURCE_NAME, SOURCE_DISPLAY_NAME) or src.display_name == SOURCE_DISPLAY_NAME:
+                return src
+        page = resp.headers.get("opc-next-page")
+        if not page:
+            return None
+
+
+def ensure_source(la, ns, cfg, parser_name: str) -> str:
     m = oci.log_analytics.models
+    existing = _find_source(la, ns, cfg)
+    if existing:
+        print(f"source exists: {existing.display_name} (iname={existing.name})")
+        return existing.display_name
     details = m.UpsertLogAnalyticsSourceDetails(
         name=SOURCE_NAME, display_name=SOURCE_DISPLAY_NAME,
         description="OCI ZPR policy, resource, finding, and enriched flow records.",
-        type_name="LOG_FILE",
-        parsers=[m.LogAnalyticsParser(name=parser_name, display_name=PARSER_DISPLAY_NAME, type="JSON")],
-        entity_types=[],
+        type_name="os_file", is_for_cloud=False, is_system=False,
+        parsers=[m.LogAnalyticsParser(name=parser_name, display_name=PARSER_DISPLAY_NAME,
+                                      type="JSON", is_default=True)],
+        entity_types=[m.LogAnalyticsSourceEntityType(
+            entity_type="oci_generic_resource")],
     )
-    la.upsert_source(namespace_name=ns, upsert_log_analytics_source_details=details, create_like_source_id=0)
+    etag = None
+    try:
+        etag = la.get_source(namespace_name=ns, source_name=SOURCE_NAME,
+                             compartment_id=cfg["tenancy"]).headers.get("etag")
+    except oci.exceptions.ServiceError:
+        pass
+    kwargs = {"if_match": etag} if etag else {}
+    la.upsert_source(namespace_name=ns, upsert_log_analytics_source_details=details, **kwargs)
     print(f"source ready: {SOURCE_DISPLAY_NAME}")
     return SOURCE_DISPLAY_NAME
 
@@ -168,37 +219,50 @@ def ensure_log_group(la, ns, cfg, name: str) -> str:
     return created.id
 
 
+def upload_records(la, ns, cfg, log_group_id: str, records_path: str) -> int:
+    """Ingest a JSONL records file into LA via the Upload API under the source."""
+    import io
+    body = io.BytesIO(Path(records_path).read_bytes())
+    name = Path(records_path).name
+    resp = la.upload_log_file(
+        namespace_name=ns,
+        upload_name=f"zpr-visibility-{name}",
+        log_source_name=SOURCE_DISPLAY_NAME,
+        filename=name,
+        opc_meta_loggrpid=log_group_id,
+        upload_log_file_body=body,
+        content_type="application/octet-stream",
+        char_encoding="UTF-8",
+    )
+    print(f"uploaded {records_path} -> status {resp.status} "
+          f"(request {resp.headers.get('opc-request-id', 'n/a')})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--profile", default="cap")
     p.add_argument("--region", default="eu-frankfurt-1")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
+    p.add_argument("--upload", help="JSONL records file to ingest into LA after provisioning")
     args = p.parse_args(argv)
 
     la, ns, cfg = _client(args.profile, args.region)
     print(f"namespace: {ns}")
     field_map = ensure_fields(la, ns)
     lg_id = ensure_log_group(la, ns, cfg, args.log_group_name)
-
-    # NOTE: custom JSON parser creation currently returns a deterministic
-    # HTTP 500 in some tenancies/regions (the auto-generated custom fields
-    # lack facet/table-eligibility flags that are not settable via upsert_field).
-    # Fields + log group + dashboard-query validation work regardless; the
-    # parser/source can be created in the OCI Console as a fallback.
-    parser_name = source_name = None
-    try:
-        parser_name = ensure_parser(la, ns, field_map)
-        source_name = ensure_source(la, ns, parser_name)
-    except Exception as exc:  # noqa: BLE001 - report and continue
-        print(f"WARN: parser/source creation failed: {getattr(exc, 'message', exc)}")
-        print("      Fields + log group are ready; create the JSON parser+source "
-              "in the OCI Console, then enable the Connector Hub connector.")
+    parser_name = ensure_parser(la, ns, field_map)
+    source_name = ensure_source(la, ns, cfg, parser_name)
 
     print("\nProvisioned:")
     print(f"  fields     = {len(field_map)} ready")
     print(f"  log_group  = {lg_id}")
-    print(f"  parser     = {parser_name or 'PENDING (see WARN)'}")
-    print(f"  source     = {source_name or 'PENDING (see WARN)'}")
+    print(f"  parser     = {parser_name}")
+    print(f"  source     = {source_name}")
+
+    if args.upload:
+        print()
+        upload_records(la, ns, cfg, lg_id, args.upload)
     return 0
 
 

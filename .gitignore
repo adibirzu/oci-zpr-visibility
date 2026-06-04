@@ -10,3 +10,4 @@ out/
 *.tfstate
 *.tfstate.*
 terraform/terraform.tfvars
+docs/dashboard-validate.json
