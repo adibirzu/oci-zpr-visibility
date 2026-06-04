@@ -1,0 +1,76 @@
+data.oci_objectstorage_namespace.ns: Reading...
+data.oci_security_attribute_security_attribute_namespaces.oracle_zpr: Reading...
+oci_logging_log_group.flow: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_vcn.lab: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_internet_gateway.igw: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_security_list.lab: Refreshing state... [id=<OCID_REDACTED>]
+data.oci_objectstorage_namespace.ns: Read complete after 0s [id=ObjectStorageNamespaceDataSource-597326131]
+oci_objectstorage_bucket.pkg[0]: Refreshing state... [id=n/${OCIR_TENANCY}/b/zpr-visibility-pkg]
+oci_objectstorage_bucket.state: Refreshing state... [id=n/${OCIR_TENANCY}/b/zpr-visibility-state]
+data.oci_security_attribute_security_attribute_namespaces.oracle_zpr: Read complete after 0s [id=SecurityAttributeSecurityAttributeNamespacesDataSource-3433755624]
+oci_security_attribute_security_attribute.app: Refreshing state... [id=securityAttributeNamespaces/<OCID_REDACTED>/securityAttributes/app]
+oci_core_route_table.public: Refreshing state... [id=<OCID_REDACTED>]
+oci_zpr_zpr_policy.demo: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_subnet.endpoints: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_subnet.controller: Refreshing state... [id=<OCID_REDACTED>]
+oci_objectstorage_object.pkg[0]: Refreshing state... [id=n/${OCIR_TENANCY}/b/zpr-visibility-pkg/o/oci_zpr_visibility_pkg.tgz]
+oci_logging_log.subnet_flow: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["web"]: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["db"]: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_instance.controller[0]: Refreshing state... [id=<OCID_REDACTED>]
+oci_identity_dynamic_group.controller[0]: Refreshing state... [id=<OCID_REDACTED>]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+
+Terraform will perform the following actions:
+
+  # oci_identity_policy.controller[0] will be created
+  + resource "oci_identity_policy" "controller" {
+      + ETag           = (known after apply)
+      + compartment_id = "<OCID_REDACTED>"
+      + defined_tags   = (known after apply)
+      + description    = "Grants the ZPR visibility controller the access it needs"
+      + freeform_tags  = (known after apply)
+      + id             = (known after apply)
+      + inactive_state = (known after apply)
+      + lastUpdateETag = (known after apply)
+      + name           = "zpr-visibility-controller-policy"
+      + policyHash     = (known after apply)
+      + state          = (known after apply)
+      + statements     = [
+          + "Allow dynamic-group zpr-visibility-controller-dg to manage all-resources in tenancy",
+        ]
+      + time_created   = (known after apply)
+      + version_date   = (known after apply)
+    }
+
+  # oci_zpr_zpr_policy.demo will be updated in-place
+  ~ resource "oci_zpr_zpr_policy" "demo" {
+        id             = "<OCID_REDACTED>"
+        name           = "zpr-visibility-demo"
+      + system_tags    = (known after apply)
+        # (8 unchanged attributes hidden)
+    }
+
+Plan: 1 to add, 1 to change, 0 to destroy.
+oci_identity_policy.controller[0]: Creating...
+oci_zpr_zpr_policy.demo: Modifying... [id=<OCID_REDACTED>]
+oci_identity_policy.controller[0]: Creation complete after 0s [id=<OCID_REDACTED>]
+oci_zpr_zpr_policy.demo: Modifications complete after 1s [id=<OCID_REDACTED>]
+
+Apply complete! Resources: 1 added, 1 changed, 0 destroyed.
+
+Outputs:
+
+controller_public_ip = "<EMDEMO_LB_PUBLIC_IP>"
+db_ip = "10.20.1.20"
+endpoints_subnet_ocid = "<OCID_REDACTED>"
+flow_log_group_ocid = "<OCID_REDACTED>"
+flow_log_ocid = "<OCID_REDACTED>"
+state_bucket = "zpr-visibility-state"
+vcn_ocid = "<OCID_REDACTED>"
+web_ip = "10.20.1.10"
+zpr_policy_ocid = "<OCID_REDACTED>"

@@ -1,0 +1,406 @@
+oci_logging_log_group.flow: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_vcn.demo: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_security_list.demo: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_subnet.demo: Refreshing state... [id=<OCID_REDACTED>]
+oci_logging_log.subnet_flow: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["web"]: Refreshing state... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["db"]: Refreshing state... [id=<OCID_REDACTED>]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # oci_core_instance.endpoint["db"] will be destroyed
+  - resource "oci_core_instance" "endpoint" {
+      - availability_domain       = "YLXT:EU-FRANKFURT-1-AD-1" -> null
+      - boot_volume_id            = "<OCID_REDACTED>" -> null
+      - compartment_id            = "<OCID_REDACTED>" -> null
+      - defined_tags              = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:17.222Z"
+        } -> null
+      - display_name              = "zpr-demo-db" -> null
+      - extended_metadata         = {} -> null
+      - fault_domain              = "FAULT-DOMAIN-2" -> null
+      - freeform_tags             = {
+          - "project" = "oci-zpr-visibility"
+          - "role"    = "db"
+        } -> null
+      - hostname_label            = "db" -> null
+      - id                        = "<OCID_REDACTED>" -> null
+      - image                     = "<OCID_REDACTED>" -> null
+      - is_cross_numa_node        = false -> null
+      - launch_mode               = "PARAVIRTUALIZED" -> null
+      - metadata                  = {
+          - "user_data" = "IyEvYmluL2Jhc2gKY2F0ID4vdXNyL2xvY2FsL2Jpbi96cHItdHJhZmZpYy5zaCA8PCdFT1MnCiMhL2Jpbi9iYXNoCndoaWxlIHRydWU7IGRvIHRpbWVvdXQgMiBiYXNoIC1jICJlY2hvID4gL2Rldi90Y3AvMTAuMjAuMS4xMC8yMiIgMj4vZGV2L251bGw7IHNsZWVwIDE1OyBkb25lCkVPUwpjaG1vZCAreCAvdXNyL2xvY2FsL2Jpbi96cHItdHJhZmZpYy5zaApjYXQgPi9ldGMvc3lzdGVtZC9zeXN0ZW0venByLXRyYWZmaWMuc2VydmljZSA8PCdFT1MnCltVbml0XQpEZXNjcmlwdGlvbj1aUFIgZGVtbyB0cmFmZmljIGdlbmVyYXRvcgpBZnRlcj1uZXR3b3JrLW9ubGluZS50YXJnZXQKW1NlcnZpY2VdCkV4ZWNTdGFydD0vdXNyL2xvY2FsL2Jpbi96cHItdHJhZmZpYy5zaApSZXN0YXJ0PWFsd2F5cwpbSW5zdGFsbF0KV2FudGVkQnk9bXVsdGktdXNlci50YXJnZXQKRU9TCnN5c3RlbWN0bCBkYWVtb24tcmVsb2FkCnN5c3RlbWN0bCBlbmFibGUgLS1ub3cgenByLXRyYWZmaWMuc2VydmljZQo="
+        } -> null
+      - private_ip                = "10.20.1.20" -> null
+      - region                    = "eu-frankfurt-1" -> null
+      - security_attributes       = {
+          - "oracle-zpr.app.mode"  = "enforce"
+          - "oracle-zpr.app.value" = "db"
+        } -> null
+      - security_attributes_state = "STABLE" -> null
+      - shape                     = "VM.Standard.E3.Flex" -> null
+      - state                     = "RUNNING" -> null
+      - subnet_id                 = "<OCID_REDACTED>" -> null
+      - system_tags               = {} -> null
+      - time_created              = "2026-06-04 20:06:17.819 +0000 UTC" -> null
+
+      - agent_config {
+          - are_all_plugins_disabled = false -> null
+          - is_management_disabled   = false -> null
+          - is_monitoring_disabled   = false -> null
+        }
+
+      - availability_config {
+          - is_live_migration_preferred = false -> null
+          - recovery_action             = "RESTORE_INSTANCE" -> null
+        }
+
+      - create_vnic_details {
+          - assign_ipv6ip             = false -> null
+          - assign_private_dns_record = false -> null
+          - assign_public_ip          = "false" -> null
+          - defined_tags              = {
+              - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+              - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:17.344Z"
+            } -> null
+          - display_name              = "zpr-demo-db" -> null
+          - freeform_tags             = {
+              - "project" = "oci-zpr-visibility"
+              - "role"    = "db"
+            } -> null
+          - hostname_label            = "db" -> null
+          - nsg_ids                   = [] -> null
+          - private_ip                = "10.20.1.20" -> null
+          - security_attributes       = {
+              - "oracle-zpr.app.mode"  = "enforce"
+              - "oracle-zpr.app.value" = "db"
+            } -> null
+          - skip_source_dest_check    = false -> null
+          - subnet_id                 = "<OCID_REDACTED>" -> null
+        }
+
+      - instance_options {
+          - are_legacy_imds_endpoints_disabled = false -> null
+        }
+
+      - launch_options {
+          - boot_volume_type                    = "PARAVIRTUALIZED" -> null
+          - firmware                            = "UEFI_64" -> null
+          - is_consistent_volume_naming_enabled = true -> null
+          - is_pv_encryption_in_transit_enabled = false -> null
+          - network_type                        = "PARAVIRTUALIZED" -> null
+          - remote_data_volume_type             = "PARAVIRTUALIZED" -> null
+        }
+
+      - shape_config {
+          - gpus                          = 0 -> null
+          - local_disks                   = 0 -> null
+          - local_disks_total_size_in_gbs = 0 -> null
+          - local_volume_size_in_gbs      = 0 -> null
+          - max_vnic_attachments          = 2 -> null
+          - memory_in_gbs                 = 8 -> null
+          - networking_bandwidth_in_gbps  = 1 -> null
+          - nvmes                         = 0 -> null
+          - ocpus                         = 1 -> null
+          - processor_description         = "2.25 GHz AMD EPYC™ 7742 (Rome)" -> null
+          - vcpus                         = 2 -> null
+        }
+
+      - source_details {
+          - boot_volume_size_in_gbs         = "47" -> null
+          - boot_volume_vpus_per_gb         = "10" -> null
+          - is_preserve_boot_volume_enabled = false -> null
+          - source_id                       = "<OCID_REDACTED>" -> null
+          - source_type                     = "image" -> null
+        }
+    }
+
+  # oci_core_instance.endpoint["web"] will be destroyed
+  - resource "oci_core_instance" "endpoint" {
+      - availability_domain       = "YLXT:EU-FRANKFURT-1-AD-1" -> null
+      - boot_volume_id            = "<OCID_REDACTED>" -> null
+      - compartment_id            = "<OCID_REDACTED>" -> null
+      - defined_tags              = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:17.235Z"
+        } -> null
+      - display_name              = "zpr-demo-web" -> null
+      - extended_metadata         = {} -> null
+      - fault_domain              = "FAULT-DOMAIN-2" -> null
+      - freeform_tags             = {
+          - "project" = "oci-zpr-visibility"
+          - "role"    = "web"
+        } -> null
+      - hostname_label            = "web" -> null
+      - id                        = "<OCID_REDACTED>" -> null
+      - image                     = "<OCID_REDACTED>" -> null
+      - is_cross_numa_node        = false -> null
+      - launch_mode               = "PARAVIRTUALIZED" -> null
+      - metadata                  = {
+          - "user_data" = "IyEvYmluL2Jhc2gKY2F0ID4vdXNyL2xvY2FsL2Jpbi96cHItdHJhZmZpYy5zaCA8PCdFT1MnCiMhL2Jpbi9iYXNoCndoaWxlIHRydWU7IGRvIHRpbWVvdXQgMiBiYXNoIC1jICJlY2hvID4gL2Rldi90Y3AvMTAuMjAuMS4yMC8xNTIxIiAyPi9kZXYvbnVsbDsgc2xlZXAgMTU7IGRvbmUKRU9TCmNobW9kICt4IC91c3IvbG9jYWwvYmluL3pwci10cmFmZmljLnNoCmNhdCA+L2V0Yy9zeXN0ZW1kL3N5c3RlbS96cHItdHJhZmZpYy5zZXJ2aWNlIDw8J0VPUycKW1VuaXRdCkRlc2NyaXB0aW9uPVpQUiBkZW1vIHRyYWZmaWMgZ2VuZXJhdG9yCkFmdGVyPW5ldHdvcmstb25saW5lLnRhcmdldApbU2VydmljZV0KRXhlY1N0YXJ0PS91c3IvbG9jYWwvYmluL3pwci10cmFmZmljLnNoClJlc3RhcnQ9YWx3YXlzCltJbnN0YWxsXQpXYW50ZWRCeT1tdWx0aS11c2VyLnRhcmdldApFT1MKc3lzdGVtY3RsIGRhZW1vbi1yZWxvYWQKc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyB6cHItdHJhZmZpYy5zZXJ2aWNlCg=="
+        } -> null
+      - private_ip                = "10.20.1.10" -> null
+      - region                    = "eu-frankfurt-1" -> null
+      - security_attributes       = {
+          - "oracle-zpr.app.mode"  = "enforce"
+          - "oracle-zpr.app.value" = "web"
+        } -> null
+      - security_attributes_state = "STABLE" -> null
+      - shape                     = "VM.Standard.E3.Flex" -> null
+      - state                     = "RUNNING" -> null
+      - subnet_id                 = "<OCID_REDACTED>" -> null
+      - system_tags               = {} -> null
+      - time_created              = "2026-06-04 20:06:17.762 +0000 UTC" -> null
+
+      - agent_config {
+          - are_all_plugins_disabled = false -> null
+          - is_management_disabled   = false -> null
+          - is_monitoring_disabled   = false -> null
+        }
+
+      - availability_config {
+          - is_live_migration_preferred = false -> null
+          - recovery_action             = "RESTORE_INSTANCE" -> null
+        }
+
+      - create_vnic_details {
+          - assign_ipv6ip             = false -> null
+          - assign_private_dns_record = false -> null
+          - assign_public_ip          = "false" -> null
+          - defined_tags              = {
+              - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+              - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:17.317Z"
+            } -> null
+          - display_name              = "zpr-demo-web" -> null
+          - freeform_tags             = {
+              - "project" = "oci-zpr-visibility"
+              - "role"    = "web"
+            } -> null
+          - hostname_label            = "web" -> null
+          - nsg_ids                   = [] -> null
+          - private_ip                = "10.20.1.10" -> null
+          - security_attributes       = {
+              - "oracle-zpr.app.mode"  = "enforce"
+              - "oracle-zpr.app.value" = "web"
+            } -> null
+          - skip_source_dest_check    = false -> null
+          - subnet_id                 = "<OCID_REDACTED>" -> null
+        }
+
+      - instance_options {
+          - are_legacy_imds_endpoints_disabled = false -> null
+        }
+
+      - launch_options {
+          - boot_volume_type                    = "PARAVIRTUALIZED" -> null
+          - firmware                            = "UEFI_64" -> null
+          - is_consistent_volume_naming_enabled = true -> null
+          - is_pv_encryption_in_transit_enabled = false -> null
+          - network_type                        = "PARAVIRTUALIZED" -> null
+          - remote_data_volume_type             = "PARAVIRTUALIZED" -> null
+        }
+
+      - shape_config {
+          - gpus                          = 0 -> null
+          - local_disks                   = 0 -> null
+          - local_disks_total_size_in_gbs = 0 -> null
+          - local_volume_size_in_gbs      = 0 -> null
+          - max_vnic_attachments          = 2 -> null
+          - memory_in_gbs                 = 8 -> null
+          - networking_bandwidth_in_gbps  = 1 -> null
+          - nvmes                         = 0 -> null
+          - ocpus                         = 1 -> null
+          - processor_description         = "2.25 GHz AMD EPYC™ 7742 (Rome)" -> null
+          - vcpus                         = 2 -> null
+        }
+
+      - source_details {
+          - boot_volume_size_in_gbs         = "47" -> null
+          - boot_volume_vpus_per_gb         = "10" -> null
+          - is_preserve_boot_volume_enabled = false -> null
+          - source_id                       = "<OCID_REDACTED>" -> null
+          - source_type                     = "image" -> null
+        }
+    }
+
+  # oci_core_security_list.demo will be destroyed
+  - resource "oci_core_security_list" "demo" {
+      - compartment_id = "<OCID_REDACTED>" -> null
+      - defined_tags   = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:09.335Z"
+        } -> null
+      - display_name   = "zpr-demo-sl" -> null
+      - freeform_tags  = {} -> null
+      - id             = "<OCID_REDACTED>" -> null
+      - state          = "AVAILABLE" -> null
+      - time_created   = "2026-06-04 20:06:09.354 +0000 UTC" -> null
+      - vcn_id         = "<OCID_REDACTED>" -> null
+
+      - egress_security_rules {
+          - destination      = "0.0.0.0/0" -> null
+          - destination_type = "CIDR_BLOCK" -> null
+          - protocol         = "all" -> null
+          - stateless        = false -> null
+        }
+
+      - ingress_security_rules {
+          - protocol    = "all" -> null
+          - source      = "10.20.0.0/16" -> null
+          - source_type = "CIDR_BLOCK" -> null
+          - stateless   = false -> null
+        }
+    }
+
+  # oci_core_subnet.demo will be destroyed
+  - resource "oci_core_subnet" "demo" {
+      - cidr_block                 = "10.20.1.0/24" -> null
+      - compartment_id             = "<OCID_REDACTED>" -> null
+      - defined_tags               = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:09.712Z"
+        } -> null
+      - dhcp_options_id            = "<OCID_REDACTED>" -> null
+      - display_name               = "zpr-demo-subnet" -> null
+      - dns_label                  = "zprsub" -> null
+      - freeform_tags              = {} -> null
+      - id                         = "<OCID_REDACTED>" -> null
+      - ipv4cidr_blocks            = [
+          - "10.20.1.0/24",
+        ] -> null
+      - ipv6cidr_blocks            = [] -> null
+      - prohibit_internet_ingress  = true -> null
+      - prohibit_public_ip_on_vnic = true -> null
+      - route_table_id             = "<OCID_REDACTED>" -> null
+      - security_list_ids          = [
+          - "<OCID_REDACTED>",
+        ] -> null
+      - state                      = "AVAILABLE" -> null
+      - subnet_domain_name         = "zprsub.zprdemo.oraclevcn.com" -> null
+      - time_created               = "2026-06-04 20:06:09.748 +0000 UTC" -> null
+      - vcn_id                     = "<OCID_REDACTED>" -> null
+      - virtual_router_ip          = "10.20.1.1" -> null
+      - virtual_router_mac         = "00:00:17:89:9B:3F" -> null
+    }
+
+  # oci_core_vcn.demo will be destroyed
+  - resource "oci_core_vcn" "demo" {
+      - byoipv6cidr_blocks       = [] -> null
+      - cidr_block               = "10.20.0.0/16" -> null
+      - cidr_blocks              = [
+          - "10.20.0.0/16",
+        ] -> null
+      - compartment_id           = "<OCID_REDACTED>" -> null
+      - default_dhcp_options_id  = "<OCID_REDACTED>" -> null
+      - default_route_table_id   = "<OCID_REDACTED>" -> null
+      - default_security_list_id = "<OCID_REDACTED>" -> null
+      - defined_tags             = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:08.846Z"
+        } -> null
+      - display_name             = "zpr-visibility-demo-vcn" -> null
+      - dns_label                = "zprdemo" -> null
+      - freeform_tags            = {
+          - "project" = "oci-zpr-visibility"
+        } -> null
+      - id                       = "<OCID_REDACTED>" -> null
+      - ipv6cidr_blocks          = [] -> null
+      - ipv6private_cidr_blocks  = [] -> null
+      - is_ipv6enabled           = false -> null
+      - security_attributes      = {
+          - "oracle-zpr.app.mode"  = "enforce"
+          - "oracle-zpr.app.value" = "fin-network"
+        } -> null
+      - state                    = "AVAILABLE" -> null
+      - time_created             = "2026-06-04 20:06:08.9 +0000 UTC" -> null
+      - vcn_domain_name          = "zprdemo.oraclevcn.com" -> null
+    }
+
+  # oci_logging_log.subnet_flow will be destroyed
+  - resource "oci_logging_log" "subnet_flow" {
+      - compartment_id     = "<OCID_REDACTED>" -> null
+      - defined_tags       = {} -> null
+      - display_name       = "zpr-demo-subnet-flow" -> null
+      - freeform_tags      = {} -> null
+      - id                 = "<OCID_REDACTED>" -> null
+      - is_enabled         = true -> null
+      - log_group_id       = "<OCID_REDACTED>" -> null
+      - log_type           = "SERVICE" -> null
+      - retention_duration = 30 -> null
+      - state              = "ACTIVE" -> null
+      - tenancy_id         = "<OCID_REDACTED>" -> null
+      - time_created       = "2026-06-04 20:06:16.957 +0000 UTC" -> null
+      - time_last_modified = "2026-06-04 20:06:16.957 +0000 UTC" -> null
+
+      - configuration {
+          - compartment_id = "<OCID_REDACTED>" -> null
+
+          - source {
+              - category    = "all" -> null
+              - parameters  = {} -> null
+              - resource    = "<OCID_REDACTED>" -> null
+              - service     = "flowlogs" -> null
+              - source_type = "OCISERVICE" -> null
+            }
+        }
+    }
+
+  # oci_logging_log_group.flow will be destroyed
+  - resource "oci_logging_log_group" "flow" {
+      - compartment_id     = "<OCID_REDACTED>" -> null
+      - defined_tags       = {
+          - "Oracle-Tags.CreatedBy" = "default/adrian.birzu"
+          - "Oracle-Tags.CreatedOn" = "2026-06-04T20:06:08.844Z"
+        } -> null
+      - display_name       = "zpr-demo-flow-logs" -> null
+      - freeform_tags      = {} -> null
+      - id                 = "<OCID_REDACTED>" -> null
+      - state              = "ACTIVE" -> null
+      - time_created       = "2026-06-04 20:06:08.892 +0000 UTC" -> null
+      - time_last_modified = "2026-06-04 20:06:08.892 +0000 UTC" -> null
+    }
+
+Plan: 0 to add, 0 to change, 7 to destroy.
+
+Changes to Outputs:
+  - db_ip               = "10.20.1.20" -> null
+  - flow_log_group_ocid = "<OCID_REDACTED>" -> null
+  - flow_log_ocid       = "<OCID_REDACTED>" -> null
+  - subnet_ocid         = "<OCID_REDACTED>" -> null
+  - vcn_ocid            = "<OCID_REDACTED>" -> null
+  - web_ip              = "10.20.1.10" -> null
+oci_logging_log.subnet_flow: Destroying... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["web"]: Destroying... [id=<OCID_REDACTED>]
+oci_core_instance.endpoint["db"]: Destroying... [id=<OCID_REDACTED>]
+oci_logging_log.subnet_flow: Destruction complete after 7s
+oci_logging_log_group.flow: Destroying... [id=<OCID_REDACTED>]
+oci_logging_log_group.flow: Destruction complete after 1s
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 10s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 10s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 20s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 20s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 30s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 30s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 40s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 40s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 50s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 50s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 1m0s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 1m0s elapsed]
+oci_core_instance.endpoint["web"]: Still destroying... [id=<OCID_REDACTED>, 1m10s elapsed]
+oci_core_instance.endpoint["db"]: Still destroying... [id=<OCID_REDACTED>, 1m10s elapsed]
+oci_core_instance.endpoint["web"]: Destruction complete after 1m15s
+oci_core_instance.endpoint["db"]: Destruction complete after 1m15s
+oci_core_subnet.demo: Destroying... [id=<OCID_REDACTED>]
+oci_core_subnet.demo: Destruction complete after 1s
+oci_core_security_list.demo: Destroying... [id=<OCID_REDACTED>]
+oci_core_security_list.demo: Destruction complete after 0s
+oci_core_vcn.demo: Destroying... [id=<OCID_REDACTED>]
+oci_core_vcn.demo: Destruction complete after 1s
+
+Destroy complete! Resources: 7 destroyed.
