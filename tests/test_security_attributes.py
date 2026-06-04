@@ -61,6 +61,14 @@ class MatchReferenceTests(unittest.TestCase):
         self.assertTrue(attribute_matches_reference(self.attrs, "apps:web"))
         self.assertFalse(attribute_matches_reference(self.attrs, "apps:db"))
 
+    def test_colon_matches_namespace_qualified_key(self):
+        # Real resource attrs are keyed 'oracle-zpr.app'; the policy reference
+        # 'app:web' omits the namespace and must still match on the local key.
+        attrs = {"oracle-zpr.app": "web"}
+        self.assertTrue(attribute_matches_reference(attrs, "app:web"))
+        self.assertFalse(attribute_matches_reference(attrs, "app:db"))
+        self.assertTrue(attribute_matches_reference(attrs, "oracle-zpr.app:web"))
+
     def test_bare_membership(self):
         self.assertTrue(attribute_matches_reference(self.attrs, "apps.role"))
         self.assertTrue(attribute_matches_reference(self.attrs, "web"))
