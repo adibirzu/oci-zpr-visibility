@@ -20,10 +20,11 @@ Status legend: ✅ done · 🔜 next · 📋 planned · 💡 idea
 
 Goal: production-quality reliability and contributor onboarding.
 
-1. **CLI consolidation** — fold `provision_la.py`, `validate_dashboards.py`,
-   `seed_cap.py`, `trigger_rules.py` into the main CLI as
-   `oci-zpr-visibility provision-la | validate-dashboards | seed | trigger`,
-   keeping the scripts as thin shims. (TDD: subcommand routing tests.)
+1. ✅ **CLI consolidation** — `provision_la.py`, `validate_dashboards.py`,
+   `seed_cap.py`, `trigger_rules.py` moved into the package and exposed as
+   `oci-zpr-visibility provision-la | validate-dashboards | seed | trigger`;
+   `scripts/*.py` are now thin shims. Subcommand routing is TDD-tested and the
+   live e2e (14/14) was re-confirmed through the new subcommand.
 2. **`--version` / `--json` global flags** and structured logging (replace `print`).
 3. **CI**: GitHub Actions running `pytest` + `terraform validate` on push/PR. ✅ (this phase)
 4. **Coverage gate** — `pytest --cov` ≥ 80%, enforced in CI.

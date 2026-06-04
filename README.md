@@ -47,16 +47,19 @@ python3 -m venv .venv
 .venv/bin/oci-zpr-visibility --help
 ```
 
-## Operational scripts
+## Operational subcommands
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/seed_cap.py` | Create the `app` security attribute + a real ZPR policy (the rule). |
-| `scripts/trigger_rules.py` | Generate flows exercising every detection classification (offline trigger; production uses VCN Flow Logs). |
-| `scripts/provision_la.py` | Idempotently create LA custom fields, log group, and (where supported) the JSON parser + source. |
+Exposed via the main CLI (and as thin `scripts/*.py` shims for legacy paths):
 
-See [docs/validation.md](docs/validation.md) for the end-to-end validation run
-and the current Log Analytics parser caveat.
+| Subcommand | Purpose |
+|------------|---------|
+| `oci-zpr-visibility seed` | Create the `app` security attribute + a real ZPR policy (the rule). |
+| `oci-zpr-visibility trigger` | Generate flows exercising every detection classification (offline trigger; production uses VCN Flow Logs). |
+| `oci-zpr-visibility provision-la` | Idempotently create LA custom fields, JSON parser, source, log group; `--upload` ingests records. |
+| `oci-zpr-visibility validate-dashboards` | Execute all dashboard queries against live LA (HIT/MISS/ERROR). |
+
+See [docs/api-cli-reference.md](docs/api-cli-reference.md) for the full surface
+and [docs/validation.md](docs/validation.md) for the end-to-end validation run.
 
 ## Local demo
 

@@ -19,14 +19,20 @@ Console entry point `oci_zpr_visibility.cli:main`. Auth flags on cloud commands:
 | `emit` | Emit JSONL records to an OCI custom log | yes | `LoggingClient.put_logs` |
 | `demo` | Run sample data through findings + correlation | no | — (local) |
 
-### Operational scripts (`scripts/`)
+### Consolidated operational subcommands
 
-| Script | Purpose | Key OCI calls |
-|--------|---------|---------------|
-| `seed_cap.py` | Create `app` security attribute + a real ZPR policy | `SecurityAttributeClient.create_security_attribute`, `ZprClient.create_zpr_policy` |
-| `trigger_rules.py` | Generate flows exercising every detection classification | — (local) |
-| `provision_la.py` | Create LA fields/parser/source/log group; `--upload` ingests records | `LogAnalyticsClient.upsert_field/upsert_parser/upsert_source/create_log_analytics_log_group/upload_log_file` |
-| `validate_dashboards.py` | Execute all dashboard queries; report HIT/MISS/ERROR | `LogAnalyticsClient.query` |
+These live in the package (`oci_zpr_visibility/`) and are exposed both as CLI
+subcommands and as thin `scripts/*.py` shims (legacy paths kept working).
+
+| Subcommand | Shim | Purpose | Key OCI calls |
+|------------|------|---------|---------------|
+| `seed` | `scripts/seed_cap.py` | Create `app` security attribute + a real ZPR policy | `SecurityAttributeClient.create_security_attribute`, `ZprClient.create_zpr_policy` |
+| `trigger` | `scripts/trigger_rules.py` | Generate flows exercising every detection classification | — (local) |
+| `provision-la` | `scripts/provision_la.py` | Create LA fields/parser/source/log group; `--upload` ingests records | `LogAnalyticsClient.upsert_field/upsert_parser/upsert_source/create_log_analytics_log_group/upload_log_file` |
+| `validate-dashboards` | `scripts/validate_dashboards.py` | Execute all dashboard queries; report HIT/MISS/ERROR | `LogAnalyticsClient.query` |
+
+Subcommands route before argparse so flags pass through to each module's own
+parser, e.g. `oci-zpr-visibility provision-la --profile cap --upload recs.jsonl`.
 
 ## 2. OCI SDK clients & operations used
 
