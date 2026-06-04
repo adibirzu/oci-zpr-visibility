@@ -7,15 +7,30 @@
       "widgets": [
         {
           "name": "Active ZPR policies",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 3,
+            "height": 3
+          }
         },
         {
           "name": "Protected resources",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats distinctcount(resource_id) as protected_resources by resource_type"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats distinctcount(resource_id) as protected_resources by resource_type",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         },
         {
           "name": "Top findings",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' | stats count as findings by severity, finding_type | sort -findings"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' | stats count as findings by severity, finding_type | sort -findings",
+          "visualization_type": "sunburst",
+          "layout": {
+            "width": 6,
+            "height": 6
+          }
         }
       ]
     },
@@ -24,15 +39,30 @@
       "widgets": [
         {
           "name": "Policy statement table",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | fields policy_name, policy_lifecycle_state, source_attribute, destination_attribute, network_scope, target_type, statement"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | fields policy_name, policy_lifecycle_state, source_attribute, destination_attribute, network_scope, target_type, statement",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          }
         },
         {
           "name": "Source destination matrix",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats count as rules by source_attribute, destination_attribute, network_scope"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats count as rules by source_attribute, destination_attribute, network_scope",
+          "visualization_type": "hbar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         },
         {
           "name": "Broad CIDR exceptions",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and finding_type = 'broad_cidr_exception' | fields severity, policy_name, cidr, recommendation"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and finding_type = 'broad_cidr_exception' | fields severity, policy_name, cidr, recommendation",
+          "visualization_type": "table",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         }
       ]
     },
@@ -41,15 +71,30 @@
       "widgets": [
         {
           "name": "Resources by attribute",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats count as resources by security_attributes"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats count as resources by security_attributes",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         },
         {
           "name": "Resources by subnet",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats count as resources by subnet_id, resource_type"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats count as resources by subnet_id, resource_type",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         },
         {
           "name": "Resource detail",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | fields resource_name, resource_type, private_ip, subnet_id, security_attributes"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | fields resource_name, resource_type, private_ip, subnet_id, security_attributes",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          }
         }
       ]
     },
@@ -58,15 +103,30 @@
       "widgets": [
         {
           "name": "Enriched ACCEPT vs REJECT",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by action, classification"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by action, classification",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          }
         },
         {
           "name": "Rejected protected destinations",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | stats count as rejects by destination_resource_name, destination_ip, destination_port, protocol | sort -rejects"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | stats count as rejects by destination_resource_name, destination_ip, destination_port, protocol | sort -rejects",
+          "visualization_type": "link",
+          "layout": {
+            "width": 12,
+            "height": 6
+          }
         },
         {
           "name": "Unexpected accepted flows",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | fields source_resource_name, destination_resource_name, destination_ip, destination_port, protocol"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | fields source_resource_name, destination_resource_name, destination_ip, destination_port, protocol",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 6
+          }
         }
       ]
     },
@@ -75,11 +135,21 @@
       "widgets": [
         {
           "name": "Policy drift candidates",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats latest(statement_hash) as latest_hash, earliest(statement_hash) as first_hash by policy_id, statement | where latest_hash != first_hash"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats latest(statement_hash) as latest_hash, earliest(statement_hash) as first_hash by policy_id, statement | where latest_hash != first_hash",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          }
         },
         {
           "name": "Missing policy findings",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and finding_type = 'protected_resource_no_matching_policy' | fields severity, resource_name, resource_type, security_attributes, recommendation"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and finding_type = 'protected_resource_no_matching_policy' | fields severity, resource_name, resource_type, security_attributes, recommendation",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          }
         }
       ]
     }
