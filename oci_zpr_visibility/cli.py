@@ -71,10 +71,27 @@ def cmd_correlate(args: argparse.Namespace) -> int:
     policy_records: list[dict[str, Any]] = []
     for policy in snapshot.get("zpr_policies", []):
         policy_records.extend(policy_statement_records(policy, snapshot.get("snapshot_time", "")))
-    flows = read_jsonl(args.flows)
+    if args.flow_log_group_id:
+        from datetime import datetime, timedelta, timezone
+
+        from .flow_logs import fetch_flow_logs
+        session = _session(args)
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=args.lookback_days)
+        fmt = "%Y-%m-%dT%H:%M:%S.000Z"
+        flows = fetch_flow_logs(
+            session, args.compartment_id or session.tenancy_id,
+            args.flow_log_group_id, args.flow_log_id,
+            start.strftime(fmt), end.strftime(fmt),
+        )
+    elif args.flows:
+        flows = read_jsonl(args.flows)
+    else:
+        print("provide --flows <jsonl> or --flow-log-group-id <ocid>", file=sys.stderr)
+        return 2
     enriched = correlate_flow_records(flows, snapshot, policy_records)
     write_jsonl(args.output, enriched)
-    emit({"output": args.output, "enriched_count": len(enriched)},
+    emit({"output": args.output, "enriched_count": len(enriched), "flow_count": len(flows)},
          f"Wrote {len(enriched)} enriched flow records to {args.output}", args.json)
     return 0
 
@@ -140,11 +157,15 @@ def build_parser() -> argparse.ArgumentParser:
     findings.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
     findings.set_defaults(func=cmd_findings)
 
-    correlate = sub.add_parser("correlate", help="Correlate JSONL VCN flow logs with a ZPR snapshot.")
+    correlate = sub.add_parser("correlate", help="Correlate VCN flow logs (JSONL or live OCI Logging) with a ZPR snapshot.")
+    add_auth_args(correlate)  # auth flags + --json (needed when fetching live flow logs)
     correlate.add_argument("--snapshot", required=True)
-    correlate.add_argument("--flows", required=True)
+    correlate.add_argument("--flows", default=None, help="local JSONL flow records (omit when fetching live)")
+    correlate.add_argument("--flow-log-group-id", default=None, help="fetch real VCN flow logs from this OCI Logging log group")
+    correlate.add_argument("--flow-log-id", default=None, help="VCN flow log OCID (with --flow-log-group-id)")
+    correlate.add_argument("--compartment-id", default=None)
+    correlate.add_argument("--lookback-days", type=int, default=1)
     correlate.add_argument("--output", default="out/zpr_enriched_flows.jsonl")
-    correlate.add_argument("--json", action="store_true", help="emit machine-readable JSON result")
     correlate.set_defaults(func=cmd_correlate)
 
     emit = sub.add_parser("emit", help="Emit normalized JSONL records to an OCI custom log.")

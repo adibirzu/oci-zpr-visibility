@@ -51,9 +51,9 @@ Goal: hands-off, scheduled detection refresh.
 
 ## Phase 3 — Coverage & correctness (📋 planned)
 
-1. **Real VCN Flow Logs path** — enable `flow_log_targets`, wire the flow
-   Connector Hub to the built-in source, correlate live ACCEPT/REJECT against
-   protected resources (replaces synthetic `trigger_rules`).
+1. ◑ **Real VCN Flow Logs path** — `correlate --flow-log-group-id` consumes real
+   VCN Flow Logs from OCI Logging (code path done, unit-tested); enabling live
+   traffic needs a VCN with ZPR-protected instances (`flow_log_targets`).
 2. **Resource enrichment** — extend beyond compute instances (load balancers,
    DB systems, OKE) for `zpr_resource` coverage.
 3. **Policy parser hardening** — track ZPR grammar changes; raise

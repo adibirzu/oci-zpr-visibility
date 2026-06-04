@@ -124,3 +124,12 @@ policy allowing `loggingAnalytics` ingestion in the target compartment. See
   explicit policy/resource correlation, not by parsing a flow field.
 - Policy syntax drift → parser keeps the raw statement and emits
   `parser_confidence` rather than discarding unparseable statements.
+
+
+## Real VCN Flow Logs path
+
+`oci-zpr-visibility correlate --flow-log-group-id <ocid> --flow-log-id <ocid>` fetches
+real VCN Flow Logs from OCI Logging (enable via terraform `flow_log_targets`),
+normalizes them (`flow_logs.normalize_flow_log_record`), and correlates against
+the snapshot — the production replacement for the synthetic `trigger`. Generating
+real ACCEPT/REJECT traffic requires a VCN with ZPR-protected instances.
