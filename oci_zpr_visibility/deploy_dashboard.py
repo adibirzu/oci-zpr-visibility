@@ -130,16 +130,17 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="oci-zpr-visibility deploy-dashboard")
+    p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
+    p.add_argument("--config-file", default=None)
     p.add_argument("--profile", default="cap")
     p.add_argument("--region", default="eu-frankfurt-1")
     p.add_argument("--compartment-id", default=None, help="defaults to the tenancy OCID")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
 
-    cfg = oci.config.from_file(profile_name=args.profile)
-    cfg["region"] = args.region
-    oci.config.validate_config(cfg)
-    compartment_id = args.compartment_id or cfg["tenancy"]
+    from .oci_clients import build_session, client
+    session = build_session(args.auth, args.config_file, args.profile, args.region)
+    compartment_id = args.compartment_id or session.tenancy_id
 
     dash = dash_mod.load_dashboard()
     errors = dash_mod.validate_dashboard(dash)
@@ -156,7 +157,7 @@ def main(argv=None) -> int:
         print("dry-run: not imported")
         return 0
 
-    md = oci.management_dashboard.DashxApisClient(cfg)
+    md = client(session, "management_dashboard.DashxApisClient")
     # idempotent: delete any existing same-name dashboard first
     try:
         for d in md.list_management_dashboards(compartment_id=compartment_id, display_name=built["displayName"]).data.items:

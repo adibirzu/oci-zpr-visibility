@@ -37,6 +37,8 @@ from pathlib import Path
 
 import oci
 
+from .oci_clients import build_session, client
+
 SOURCE_DISPLAY_NAME = "OCI ZPR Visibility JSON"
 SOURCE_NAME = "oci_zpr_visibility_json"
 PARSER_DISPLAY_NAME = "OCI ZPR Visibility JSON Parser"
@@ -65,13 +67,12 @@ SAMPLE_CONTENT = (
 )
 
 
-def _client(profile: str, region: str):
-    cfg = oci.config.from_file(profile_name=profile)
-    cfg["region"] = region
-    oci.config.validate_config(cfg)
-    la = oci.log_analytics.LogAnalyticsClient(cfg)
-    ns = oci.object_storage.ObjectStorageClient(cfg).get_namespace().data
-    return la, ns, cfg
+def _client(auth: str, config_file: str | None, profile: str, region: str):
+    """Build (session, LA client, namespace) supporting api_key / instance / resource principal."""
+    session = build_session(auth, config_file, profile, region)
+    la = client(session, "log_analytics.LogAnalyticsClient")
+    ns = client(session, "object_storage.ObjectStorageClient").get_namespace().data
+    return session, la, ns
 
 
 def ensure_fields(la, ns) -> dict[str, str]:
@@ -156,14 +157,14 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
     return PARSER_NAME
 
 
-def _find_source(la, ns, cfg):
+def _find_source(la, ns, tenancy_id):
     """Return an existing source matching our display/internal name, else None."""
     page = None
     while True:
         kwargs = {"limit": 1000, "is_system": "ALL"}
         if page:
             kwargs["page"] = page
-        resp = la.list_sources(namespace_name=ns, compartment_id=cfg["tenancy"], **kwargs)
+        resp = la.list_sources(namespace_name=ns, compartment_id=tenancy_id, **kwargs)
         for src in resp.data.items:
             if src.name in (SOURCE_NAME, SOURCE_DISPLAY_NAME) or src.display_name == SOURCE_DISPLAY_NAME:
                 return src
@@ -172,9 +173,9 @@ def _find_source(la, ns, cfg):
             return None
 
 
-def ensure_source(la, ns, cfg, parser_name: str) -> str:
+def ensure_source(la, ns, tenancy_id, parser_name: str) -> str:
     m = oci.log_analytics.models
-    existing = _find_source(la, ns, cfg)
+    existing = _find_source(la, ns, tenancy_id)
     if existing:
         print(f"source exists: {existing.display_name} (iname={existing.name})")
         return existing.display_name
@@ -190,7 +191,7 @@ def ensure_source(la, ns, cfg, parser_name: str) -> str:
     etag = None
     try:
         etag = la.get_source(namespace_name=ns, source_name=SOURCE_NAME,
-                             compartment_id=cfg["tenancy"]).headers.get("etag")
+                             compartment_id=tenancy_id).headers.get("etag")
     except oci.exceptions.ServiceError:
         pass
     kwargs = {"if_match": etag} if etag else {}
@@ -199,11 +200,11 @@ def ensure_source(la, ns, cfg, parser_name: str) -> str:
     return SOURCE_DISPLAY_NAME
 
 
-def ensure_log_group(la, ns, cfg, name: str) -> str:
+def ensure_log_group(la, ns, tenancy_id, name: str) -> str:
     m = oci.log_analytics.models
     for lg in oci.pagination.list_call_get_all_results(
         la.list_log_analytics_log_groups, namespace_name=ns,
-        compartment_id=cfg["tenancy"], limit=200
+        compartment_id=tenancy_id, limit=200
     ).data:
         if lg.display_name == name:
             print(f"log group exists: {name} -> {lg.id}")
@@ -211,7 +212,7 @@ def ensure_log_group(la, ns, cfg, name: str) -> str:
     created = la.create_log_analytics_log_group(
         namespace_name=ns,
         create_log_analytics_log_group_details=m.CreateLogAnalyticsLogGroupDetails(
-            compartment_id=cfg["tenancy"], display_name=name,
+            compartment_id=tenancy_id, display_name=name,
             description="ZPR visibility ingestion target",
         ),
     ).data
@@ -219,7 +220,7 @@ def ensure_log_group(la, ns, cfg, name: str) -> str:
     return created.id
 
 
-def upload_records(la, ns, cfg, log_group_id: str, records_path: str) -> int:
+def upload_records(la, ns, log_group_id: str, records_path: str) -> int:
     """Ingest a JSONL records file into LA via the Upload API under the source."""
     import io
     body = io.BytesIO(Path(records_path).read_bytes())
@@ -241,18 +242,21 @@ def upload_records(la, ns, cfg, log_group_id: str, records_path: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
+    p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
+    p.add_argument("--config-file", default=None)
     p.add_argument("--profile", default="cap")
     p.add_argument("--region", default="eu-frankfurt-1")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--upload", help="JSONL records file to ingest into LA after provisioning")
     args = p.parse_args(argv)
 
-    la, ns, cfg = _client(args.profile, args.region)
+    session, la, ns = _client(args.auth, args.config_file, args.profile, args.region)
+    tenancy_id = session.tenancy_id
     print(f"namespace: {ns}")
     field_map = ensure_fields(la, ns)
-    lg_id = ensure_log_group(la, ns, cfg, args.log_group_name)
+    lg_id = ensure_log_group(la, ns, tenancy_id, args.log_group_name)
     parser_name = ensure_parser(la, ns, field_map)
-    source_name = ensure_source(la, ns, cfg, parser_name)
+    source_name = ensure_source(la, ns, tenancy_id, parser_name)
 
     print("\nProvisioned:")
     print(f"  fields     = {len(field_map)} ready")
@@ -262,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.upload:
         print()
-        upload_records(la, ns, cfg, lg_id, args.upload)
+        upload_records(la, ns, lg_id, args.upload)
     return 0
 
 

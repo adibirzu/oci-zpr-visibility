@@ -52,10 +52,11 @@ def main(argv=None) -> int:
         write_jsonl(Path(fh.name), all_records)
         records_path = fh.name
 
-    rc = provision_la.main([
-        "--profile", args.profile, "--region", args.region,
-        "--log-group-name", args.log_group_name, "--upload", records_path,
-    ])
+    prov_argv = ["--auth", args.auth, "--profile", args.profile, "--region", args.region,
+                 "--log-group-name", args.log_group_name, "--upload", records_path]
+    if args.config_file:
+        prov_argv += ["--config-file", args.config_file]
+    rc = provision_la.main(prov_argv)
 
     published = 0
     try:
