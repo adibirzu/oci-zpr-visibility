@@ -36,6 +36,17 @@ python3 -m venv .venv
 .venv/bin/oci-zpr-visibility --help
 ```
 
+## Operational scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/seed_cap.py` | Create the `app` security attribute + a real ZPR policy (the rule). |
+| `scripts/trigger_rules.py` | Generate flows exercising every detection classification (offline trigger; production uses VCN Flow Logs). |
+| `scripts/provision_la.py` | Idempotently create LA custom fields, log group, and (where supported) the JSON parser + source. |
+
+See [docs/validation.md](docs/validation.md) for the end-to-end validation run
+and the current Log Analytics parser caveat.
+
 ## Local demo
 
 ```bash

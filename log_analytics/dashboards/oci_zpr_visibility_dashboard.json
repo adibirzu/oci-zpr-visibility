@@ -7,11 +7,11 @@
       "widgets": [
         {
           "name": "Active ZPR policies",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats dc(policy_id) as active_policies by policy_lifecycle_state"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state"
         },
         {
           "name": "Protected resources",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats dc(resource_id) as protected_resources by resource_type"
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats distinctcount(resource_id) as protected_resources by resource_type"
         },
         {
           "name": "Top findings",
