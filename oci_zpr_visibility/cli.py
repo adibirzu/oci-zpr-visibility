@@ -139,10 +139,38 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--output-dir", default="out/demo")
     demo.set_defaults(func=cmd_demo)
 
+    # Consolidated operational subcommands are listed here for `--help`, but are
+    # routed in main() before argparse so their flags pass through verbatim to the
+    # delegated module's own argparse (the single source of truth). See _delegate.
+    for name, _module_name, helptext in _DELEGATED_SUBCOMMANDS:
+        sub.add_parser(name, help=helptext, add_help=False)
+
     return parser
 
 
+# (subcommand, package module under oci_zpr_visibility, help text)
+_DELEGATED_SUBCOMMANDS = [
+    ("provision-la", "provision_la", "Provision LA fields/parser/source/log group; --upload to ingest records."),
+    ("validate-dashboards", "validate_dashboards", "Execute dashboard queries against live LA (HIT/MISS/ERROR)."),
+    ("seed", "seed", "Create the 'app' security attribute and a real ZPR policy."),
+    ("trigger", "trigger", "Generate flows exercising every detection classification."),
+]
+_DELEGATED_MODULES = {name: module for name, module, _help in _DELEGATED_SUBCOMMANDS}
+
+
+def _delegate(subcommand: str, argv: list[str]) -> int:
+    """Forward remaining args to the delegated package module's main()."""
+    import importlib
+
+    module = importlib.import_module(f"oci_zpr_visibility.{_DELEGATED_MODULES[subcommand]}")
+    return int(module.main(argv))
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    # Route consolidated subcommands before argparse so their flags pass through.
+    if argv and argv[0] in _DELEGATED_MODULES:
+        return _delegate(argv[0], argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
