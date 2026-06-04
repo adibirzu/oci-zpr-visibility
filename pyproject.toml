@@ -22,3 +22,7 @@ oci-zpr-visibility = "oci_zpr_visibility.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["oci_zpr_visibility*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
