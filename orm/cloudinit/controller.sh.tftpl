@@ -1,0 +1,41 @@
+#!/bin/bash
+set -x
+exec > /var/log/zpr-controller.log 2>&1
+dnf install -y python3.11 python3.11-pip || yum install -y python311 python311-pip
+PIP=$(command -v pip3.11 || command -v pip3)
+$PIP install --upgrade pip oci
+
+# Download the collector package via instance principal (retry until IAM propagates).
+python3.11 - <<'PY'
+import oci, time, sys
+signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+osc = oci.object_storage.ObjectStorageClient({}, signer=signer)
+for attempt in range(40):
+    try:
+        ns = osc.get_namespace().data
+        obj = osc.get_object(ns, "${pkg_bucket}", "${pkg_object}")
+        open("/tmp/pkg.tgz", "wb").write(obj.data.content)
+        print("downloaded package"); sys.exit(0)
+    except Exception as e:
+        print("waiting for instance principal/policy:", str(e)[:120]); time.sleep(20)
+sys.exit(1)
+PY
+
+mkdir -p /tmp/pkg && tar xzf /tmp/pkg.tgz -C /tmp/pkg
+$PIP install /tmp/pkg
+BIN=$(command -v oci-zpr-visibility || echo /usr/local/bin/oci-zpr-visibility)
+# log_analytics/ isn't packaged; point the dashboard builder at the extracted copy.
+export OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+
+# Provision LA content, deploy the dashboard, and run the first refresh — all via
+# instance principal (no API keys on the box).
+$BIN provision-la --auth instance_principal --region ${region} --log-group-name ${log_group_name}
+$BIN deploy-dashboard --auth instance_principal --region ${region}
+$BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} || true
+
+# Keep refreshing every 15 minutes via cron.
+cat >/etc/cron.d/zpr-refresh <<CRON
+OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+*/15 * * * * root $BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} >> /var/log/zpr-refresh.log 2>&1
+CRON
+echo "ZPR controller bootstrap complete"

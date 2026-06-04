@@ -1,0 +1,45 @@
+title: "OCI ZPR Visibility Lab"
+description: "Zero Trust Packet Routing visibility: tagged VCN + web/db endpoints, ZPR policy, VCN Flow Logs, and a controller that builds the Log Analytics source, fields, dashboard, and metrics."
+schemaVersion: 1.1.0
+version: "1.0.0"
+locale: "en"
+
+variableGroups:
+  - title: "Placement"
+    variables: ["compartment_ocid", "region", "availability_domain"]
+  - title: "Lab"
+    variables: ["instance_image_ocid", "ssh_public_key", "enable_controller"]
+  - title: "Hidden"
+    variables: ["tenancy_ocid", "package_tarball_path"]
+    visible: false
+
+variables:
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    description: "Compartment for the lab resources."
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: "Region"
+    required: true
+  availability_domain:
+    type: oci:identity:availabilitydomain:name
+    title: "Availability Domain"
+    required: true
+    dependsOn:
+      compartmentId: ${compartment_ocid}
+  instance_image_ocid:
+    type: oci:core:image:id
+    title: "Oracle Linux 9 image (E3.Flex)"
+    required: true
+    dependsOn:
+      compartmentId: ${compartment_ocid}
+  ssh_public_key:
+    type: oci:core:ssh:publickey
+    title: "SSH public key (optional)"
+    required: false
+  enable_controller:
+    type: boolean
+    title: "Auto-provision Log Analytics + dashboard (controller VM)"
+    default: true

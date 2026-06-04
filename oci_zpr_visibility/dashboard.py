@@ -9,11 +9,19 @@ row/column (matches the OCI LA deploy convention).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-DASHBOARD_PATH = PROJECT_DIR / "log_analytics" / "dashboards" / "oci_zpr_visibility_dashboard.json"
+# Env override lets a pip-installed deployment (e.g. the ORM controller) point at
+# the dashboard descriptor when log_analytics/ is not next to the package.
+DASHBOARD_PATH = Path(
+    os.environ.get(
+        "OCI_ZPR_DASHBOARD_PATH",
+        PROJECT_DIR / "log_analytics" / "dashboards" / "oci_zpr_visibility_dashboard.json",
+    )
+)
 SOURCE_DISPLAY_NAME = "OCI ZPR Visibility JSON"
 GRID_COLUMNS = 12
 

@@ -13,3 +13,6 @@ terraform/terraform.tfvars
 docs/dashboard-validate.json
 .coverage
 htmlcov/
+orm/oci_zpr_visibility_pkg.tgz
+orm-stack.zip
+orm/.terraform/
