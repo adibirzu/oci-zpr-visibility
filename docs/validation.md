@@ -18,7 +18,7 @@ live only in the gitignored `terraform/terraform.tfvars` and the tenancy.
 | Log collection | `emit` → OCI Logging → `logging-search` | ✅ all records, 4 record_types |
 | LA fields + parser + source + log group | `scripts/provision_la.py` | ✅ 40 fields, JSON parser, source, log group |
 | LA ingestion | `provision_la.py --upload` (Upload API) | ✅ status 200 |
-| **Dashboards (execute)** | `scripts/validate_dashboards.py` | ✅ **14/14 widgets HIT, 0 MISS, 0 ERROR** |
+| **Dashboards (execute)** | `scripts/validate_dashboards.py` | ✅ **21/21 widgets HIT, 0 MISS, 0 ERROR** |
 
 ## End-to-end path (all live in cap)
 

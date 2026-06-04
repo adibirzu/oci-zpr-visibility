@@ -52,7 +52,12 @@ def main(argv=None) -> int:
         time_zone="UTC",
     )
 
-    dash = json.loads(DASHBOARD.read_text())
+    from . import dashboard as dash_mod
+    dash = dash_mod.load_dashboard()
+    schema_errors = dash_mod.validate_dashboard(dash)
+    if schema_errors:
+        print("dashboard schema errors:", *schema_errors, sep="\n  ", file=sys.stderr)
+        return 2
     results = []
     for tab in dash["tabs"]:
         for widget in tab["widgets"]:
