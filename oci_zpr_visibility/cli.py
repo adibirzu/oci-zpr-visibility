@@ -9,6 +9,7 @@ from typing import Any
 
 from . import __version__
 from .collector import ZprCollector
+from .config import RunConfig
 from .correlate import correlate_flow_records
 from .findings import generate_findings
 from .jsonutil import read_json, read_jsonl, write_json, write_jsonl
@@ -18,7 +19,8 @@ from .policy_parser import policy_statement_records
 
 
 def _session(args: argparse.Namespace) -> Any:
-    return build_session(args.auth, args.config_file, args.profile, args.region)
+    cfg = RunConfig.from_args(args)  # validates auth/profile at startup
+    return build_session(cfg.auth, cfg.config_file, cfg.profile, cfg.region)
 
 
 def cmd_enable_zpr(args: argparse.Namespace) -> int:
