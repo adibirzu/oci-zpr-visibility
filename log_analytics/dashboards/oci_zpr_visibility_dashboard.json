@@ -6,6 +6,51 @@
       "name": "Executive posture",
       "widgets": [
         {
+          "name": "KPI: Active policies",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as policies",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "name": "KPI: Protected resources",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_resource' | stats distinctcount(resource_id) as resources",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "name": "KPI: Critical+High findings",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and severity in ('CRITICAL', 'HIGH') | stats count as high_findings",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "name": "KPI: Blocked flows",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' | stats count as blocked_flows",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "name": "KPI: Unexpected accepted",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | stats count as unexpected",
+          "visualization_type": "tile",
+          "layout": {
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
           "name": "Active ZPR policies",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state",
           "visualization_type": "tile",
@@ -62,6 +107,15 @@
           "layout": {
             "width": 6,
             "height": 5
+          }
+        },
+        {
+          "name": "Policy relationship sunburst",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats count as rules by source_attribute, destination_attribute",
+          "visualization_type": "sunburst",
+          "layout": {
+            "width": 6,
+            "height": 6
           }
         }
       ]
@@ -123,6 +177,15 @@
           "name": "Unexpected accepted flows",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | fields source_resource_name, destination_resource_name, destination_ip, destination_port, protocol",
           "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "name": "Flow path link (src to dst)",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by source_resource_name, destination_resource_name, classification",
+          "visualization_type": "link",
           "layout": {
             "width": 12,
             "height": 6
