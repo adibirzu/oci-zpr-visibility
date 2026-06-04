@@ -11,3 +11,5 @@ out/
 *.tfstate.*
 terraform/terraform.tfvars
 docs/dashboard-validate.json
+.coverage
+htmlcov/

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .collector import ZprCollector
 from .correlate import correlate_flow_records
 from .findings import generate_findings
@@ -99,6 +100,7 @@ def add_auth_args(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="oci-zpr-visibility")
+    parser.add_argument("--version", action="version", version=f"oci-zpr-visibility {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     enable = sub.add_parser("enable-zpr", help="Enable ZPR in the tenancy root compartment.")
