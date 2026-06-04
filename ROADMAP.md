@@ -25,9 +25,9 @@ Goal: production-quality reliability and contributor onboarding.
    `oci-zpr-visibility provision-la | validate-dashboards | seed | trigger`;
    `scripts/*.py` are now thin shims. Subcommand routing is TDD-tested and the
    live e2e (14/14) was re-confirmed through the new subcommand.
-2. **`--version` / `--json` global flags** and structured logging (replace `print`).
+2. ✅ **`--version` flag** (`oci-zpr-visibility --version`). 🔜 `--json` global flag + structured logging (replace `print`).
 3. **CI**: GitHub Actions running `pytest` + `terraform validate` on push/PR. ✅ (this phase)
-4. **Coverage gate** — `pytest --cov` ≥ 80%, enforced in CI.
+4. ✅ **Coverage gate** — pure-logic core ≥ 80% (now 90%), enforced in CI.
 5. **Typed config** — frozen dataclass for run config; validate at startup.
 6. **Retry/backoff policy** centralised for OCI calls; explicit timeouts.
 

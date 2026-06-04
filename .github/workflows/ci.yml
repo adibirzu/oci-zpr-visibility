@@ -21,6 +21,14 @@ jobs:
           pip install -e ".[dev]"
       - name: Test
         run: pytest tests/ -q
+      - name: Coverage gate (pure-logic core >= 80%)
+        run: |
+          pytest tests/ -q \
+            --cov=oci_zpr_visibility.jsonutil \
+            --cov=oci_zpr_visibility.security_attributes \
+            --cov=oci_zpr_visibility.policy_parser \
+            --cov=oci_zpr_visibility.correlate \
+            --cov=oci_zpr_visibility.findings
 
   terraform:
     name: Terraform validate

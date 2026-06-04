@@ -15,6 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "pytest-cov>=5.0",
 ]
 
 [project.scripts]
@@ -26,3 +27,13 @@ include = ["oci_zpr_visibility*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+# Coverage gate is scoped to the deterministic pure-logic core. Cloud/IO modules
+# (collector, oci_clients, provision_la, validate_dashboards, seed, trigger,
+# logging_ingestion) are exercised by the live e2e, not unit tests. CI runs:
+#   pytest --cov=oci_zpr_visibility.jsonutil --cov=oci_zpr_visibility.security_attributes \
+#          --cov=oci_zpr_visibility.policy_parser --cov=oci_zpr_visibility.correlate \
+#          --cov=oci_zpr_visibility.findings
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
