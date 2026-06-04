@@ -57,11 +57,18 @@ def main(argv=None) -> int:
         "--log-group-name", args.log_group_name, "--upload", records_path,
     ])
 
+    published = 0
+    try:
+        from .metrics import publish_metrics
+        published = publish_metrics(session, all_records)
+    except Exception as exc:  # noqa: BLE001 - metrics are best-effort
+        print(f"WARN: metric publish failed: {getattr(exc, 'message', exc)}", file=sys.stderr)
+
     emit(
         {"records": len(records), "findings": len(findings), "drift": len(drift),
-         "uploaded": len(all_records), "provision_rc": rc},
+         "uploaded": len(all_records), "metrics_published": published, "provision_rc": rc},
         f"refresh: {len(records)} records, {len(findings)} findings, {len(drift)} drift -> "
-        f"uploaded {len(all_records)} (provision rc={rc})",
+        f"uploaded {len(all_records)}, {published} metrics (provision rc={rc})",
         args.json,
     )
     return rc
