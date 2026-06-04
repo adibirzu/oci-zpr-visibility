@@ -18,11 +18,22 @@ Primary Oracle references:
 * [VCN Flow Log details](https://docs.oracle.com/en-us/iaas/Content/Logging/Reference/details_for_vcn_flow_logs.htm)
 * [Connector Hub Terraform resource](https://registry.terraform.io/providers/oracle/oci/latest/docs/resources/sch_service_connector)
 
+## Documentation
+
+| Doc | What it covers |
+|-----|----------------|
+| [docs/architecture.md](docs/architecture.md) | End-to-end design, ingestion paths, collector internals, detection logic, IAM |
+| [docs/services.md](docs/services.md) | OCI service dependency graph + relationship table |
+| [docs/api-cli-reference.md](docs/api-cli-reference.md) | OCI SDK operations, `oci` CLI commands, app CLI + scripts, Terraform resources |
+| [docs/runbook.md](docs/runbook.md) | Operator flow: deploy, collect, validate, IAM policies |
+| [docs/validation.md](docs/validation.md) | Live end-to-end validation results in cap (14/14 dashboards) |
+| [ROADMAP.md](ROADMAP.md) | Long-term, phased enhancement plan |
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for the end-to-end design:
-two ingestion paths (Python inventory/findings + VCN Flow Logs) converging in
-OCI Log Analytics through Connector Hub, the collector internals, the detection
+the Python inventory/findings path (LA Upload API to a custom source) and the
+VCN Flow Logs path (Connector Hub), the collector internals, the detection
 logic, and the IAM model.
 
 ## Install
