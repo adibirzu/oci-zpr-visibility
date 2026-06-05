@@ -58,6 +58,8 @@ FIELD_TOKENS = [
     "destination_resource_id", "destination_resource_name",
     "source_security_attributes", "destination_security_attributes",
     "zpr_destination", "matched_expected_policy",
+    # zpr_policy_drift records (statement_hash change across runs)
+    "old_hash", "new_hash",
 ]
 
 SAMPLE_CONTENT = (

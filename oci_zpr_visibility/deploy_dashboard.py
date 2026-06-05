@@ -20,28 +20,70 @@ from . import dashboard as dash_mod
 
 DISPLAY_NAME = "OCI ZPR Visibility"
 DASHBOARD_ID = "oci-zpr-visibility"
-DEFAULT_TIME_PERIOD = {"timePeriod": "P30D"}
+# OCI LA's own relative-time token (NOT ISO-8601 "P30D"); the ISO form makes the
+# JET time binding fail.
+DEFAULT_TIME_PERIOD = {"timePeriod": "l30d"}
+
+# Per-visualization options modelled on a working OCI LA dashboard export.
+# An EMPTY visualizationOptions object breaks JET viz binding ("reading
+# 'length'"); every viz type needs real keys. Unknown types fall back to a
+# safe legend+tooltip pair.
+_BAR_OPTS = {"legend": "auto", "showTooltip": True, "stacked": True}
+_FLAT_OPTS = {"legend": "auto", "showTooltip": True}
+VIZ_OPTIONS = {
+    "bar": _BAR_OPTS,
+    "hbar": _BAR_OPTS,
+    "sunburst": _FLAT_OPTS,
+    "table": _FLAT_OPTS,
+    "tile": _FLAT_OPTS,
+}
 
 
 def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+def _scope_filters(compartment_id: str) -> dict:
+    """LogGroup-scoped filter object (NOT a list).
+
+    JET requires scopeFilters to be an object with LogGroup/Entity/LogSet
+    scopes; a list triggers "Cannot read properties of undefined (reading
+    'localName')" and aborts the whole dashboard. Scoping by LogGroup (rooted
+    at the compartment, include sub-compartments) is field-agnostic, so it does
+    not reintroduce the old "No data" problem that a Compartment-OCID *field*
+    filter caused — our records live in a log group under this compartment.
+    """
+    root = [{"label": "root", "value": compartment_id}]
+    return {
+        "LogGroup": {
+            "flags": {"IncludeSubCompartments": True},
+            "type": "LogGroup", "values": root,
+        },
+        "Entity": {
+            "flags": {"IncludeDependents": True, "ScopeCompartmentId": compartment_id},
+            "type": "Entity", "values": [],
+        },
+        "LogSet": {"flags": {}, "type": "LogSet", "values": []},
+        "filters": [
+            {"flags": {"includeSubCompartments": True}, "type": "LogGroup", "values": root},
+            {"flags": {"includeDependents": True, "scopeCompartmentId": compartment_id},
+             "type": "Entity", "values": []},
+            {"flags": {}, "type": "LogSet", "values": []},
+        ],
+        "isGlobal": False,
+    }
+
+
 def _saved_search(search_id, widget, compartment_id) -> dict:
-    # No scopeFilters: the Upload-API source has no "Compartment OCID" record
-    # field, so a compartment scope filter makes every query invalid ("No data").
-    # The widget query already scopes by 'Log Source'.
+    vt = widget["visualization_type"]
     ui = {
         "enableWidgetInApp": True,
         "queryString": widget["query"],
-        "scopeFilters": [],
+        "scopeFilters": _scope_filters(compartment_id),
         "showTitle": True,
         "timeSelection": DEFAULT_TIME_PERIOD,
-        # Push only an empty/clean viz-options object: the descriptor's
-        # severity_colors/classification_colors are design metadata, not valid OCI
-        # visualizationOptions keys, and feeding them to the renderer crashes it.
-        "visualizationOptions": {},
-        "visualizationType": widget["visualization_type"],
+        "visualizationOptions": dict(VIZ_OPTIONS.get(vt, _FLAT_OPTS)),
+        "visualizationType": vt,
         "vizType": "lxSavedSearchWidgetType",
     }
     tags = {}
@@ -111,7 +153,7 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
         "type": "normal",
         "isFavorite": False,
         "nls": {},
-        "uiConfig": {"isFilteringEnabled": True, "isRefreshEnabled": True},
+        "uiConfig": {"isFilteringEnabled": True, "isRefreshEnabled": True, "defaultQueryMode": "raw"},
         "dataConfig": [],
         "screenImage": " ",
         "freeformTags": {"platform": "oci-zpr-visibility"},
@@ -121,7 +163,7 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
             {"paramName": "log-analytics-entity-filter", "displayName": "Entity",
              "paramType": "LogAnalyticsEntity", "defaultValue": "", "isRequired": False},
             {"paramName": "time", "displayName": "Time Range", "paramType": "Time",
-             "defaultValue": "P30D", "isRequired": False},
+             "defaultValue": "l30d", "isRequired": False},
         ],
         "tiles": tiles,
         "savedSearches": saved,

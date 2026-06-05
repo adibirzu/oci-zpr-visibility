@@ -223,7 +223,7 @@
         },
         {
           "name": "Rejected protected destinations",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | stats count as rejects by destination_resource_name, destination_ip, destination_port, protocol | sort -rejects",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | fields destination_resource_name, destination_ip, destination_port, protocol",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -265,7 +265,7 @@
         },
         {
           "name": "Flow path link (src to dst)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by source_resource_name, destination_resource_name, classification",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | fields source_resource_name, destination_resource_name, destination_ip, classification",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -291,7 +291,7 @@
       "widgets": [
         {
           "name": "Policy drift candidates",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats latest(statement_hash) as latest_hash, earliest(statement_hash) as first_hash by policy_id, statement | where latest_hash != first_hash",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | fields policy_id, statement, old_hash, new_hash",
           "visualization_type": "table",
           "layout": {
             "width": 12,
