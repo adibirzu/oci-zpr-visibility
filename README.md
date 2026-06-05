@@ -45,10 +45,40 @@ Primary Oracle references:
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) for the end-to-end design:
-the Python inventory/findings path (LA Upload API to a custom source) and the
-VCN Flow Logs path (Connector Hub), the collector internals, the detection
-logic, and the IAM model.
+### How logs are collected and sent to Log Analytics
+
+```
+ OCI ZPR / Security Attributes / Core APIs        VCN Flow Logs (OCI Logging)
+        │  (read-only SDK, instance principal)              │
+        ▼                                                   ▼
+  ZprCollector.collect ── snapshot ──▶ normalize ──▶ records.jsonl
+   policies · attributes · resources    policy_parser/findings/correlate/state
+        │                                   (record_type per line)
+        ▼  provision-la (idempotent)        ▼  upload_log_file (LA Upload API)
+   fields + JSON parser + custom source ───▶  "OCI ZPR Visibility JSON"  ──▶  Log group
+   "OCI ZPR Visibility JSON" + log group        parser extracts fields,            │
+        │                                        Time ⟵ snapshot_time               ▼
+        └────────────── deploy-dashboard ──▶ Management Dashboard + metrics + alarms
+```
+
+1. **Collect** — read ZPR config/policies, the `oracle-zpr` security attributes,
+   and protected resources (VCN/instances via Core APIs, since Resource Search
+   omits `securityAttributes`); correlate VCN Flow Logs against policy intent.
+2. **Normalize** — emit flat JSON records, one per line, each tagged with a
+   `record_type` (`zpr_policy_statement` / `zpr_resource` / `zpr_finding` /
+   `zpr_enriched_flow` / `zpr_policy_drift`) and a shared `snapshot_time`.
+3. **Provision** — idempotently create ~42 LA custom fields, a JSON parser
+   (`$.<key>` → field, `snapshot_time` → **Time**), the custom source
+   **`OCI ZPR Visibility JSON`**, and the `zpr-visibility-la` log group.
+4. **Upload** — stream the JSONL via the LA **Upload API**; LA parses it and the
+   records are queryable as `'Log Source' = 'OCI ZPR Visibility JSON'`.
+5. **Visualize** — `deploy-dashboard` imports the Management Dashboard; `refresh`
+   re-runs the whole loop every 15 min and publishes Monitoring metrics.
+
+Full design (component diagram, collector internals, detection model, IAM):
+[docs/architecture.md](docs/architecture.md). Record schema:
+[docs/log-format.md](docs/log-format.md). Detection rules:
+[docs/detections.md](docs/detections.md).
 
 ## Install
 
