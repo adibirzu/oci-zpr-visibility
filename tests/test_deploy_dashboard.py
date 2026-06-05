@@ -46,10 +46,10 @@ class BuildManagementDashboardTests(unittest.TestCase):
             self.assertIn("filters", scope)
 
     def test_time_selection_uses_la_format(self):
-        # OCI LA expects its own "l30d" token, not ISO-8601 "P30D".
+        # OCI LA expects its own relative-time token (e.g. "l60m"), not ISO "P30D".
         for s in self.built["savedSearches"]:
             self.assertEqual(
-                s["uiConfig"]["timeSelection"]["timePeriod"], "l30d"
+                s["uiConfig"]["timeSelection"]["timePeriod"], "l60m"
             )
 
     def test_visualization_options_non_empty(self):

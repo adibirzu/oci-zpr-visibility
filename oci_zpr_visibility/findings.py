@@ -19,6 +19,33 @@ def _severity_for_cidr(cidr: str) -> str:
     return "LOW"
 
 
+def _reference_is_known(
+    reference: str,
+    namespaces: set[str],
+    names: set[str],
+    keys: set[str],
+) -> bool:
+    """Decide whether a policy attribute reference resolves to a known attribute.
+
+    References appear in several shapes:
+      - ``app:web``            -> key ``app`` (namespace implicit), value ``web``
+      - ``oracle-zpr.app:web`` -> namespace ``oracle-zpr``, key ``app``
+      - ``apps:web``           -> ``apps`` is the namespace (legacy shape)
+
+    Known when: the namespaced key matches (``oracle-zpr.app``), OR the bare key
+    is a known attribute *name* (``app``), OR the leading segment is a known
+    *namespace*. Comparing the key against attribute names (not namespaces) is
+    the fix for the ``app:web`` false positive.
+    """
+    left = reference.strip().split("=", 1)[0].split(":", 1)[0]  # drop the value
+    if left in keys:
+        return True
+    if "." in left:
+        ns, _, key = left.partition(".")
+        return ns in namespaces or key in names
+    return left in names or left in namespaces
+
+
 def _policy_targets_resource(policy_records: list[dict[str, Any]], attrs: dict[str, str]) -> bool:
     for record in policy_records:
         destination = record.get("destination_attribute")
@@ -81,11 +108,17 @@ def generate_findings(snapshot: dict[str, Any], policy_records: list[dict[str, A
         for item in snapshot.get("security_attributes", [])
         if item.get("namespace_name")
     }
+    known_attribute_names = {
+        str(item.get("name"))
+        for item in snapshot.get("security_attributes", [])
+        if item.get("name")
+    }
     for record in policy_records:
         for reference in record.get("attribute_references", []):
             reference_text = str(reference)
-            namespace = reference_text.split(".", 1)[0].split(":", 1)[0]
-            if reference_text in known_attribute_keys or namespace in known_namespaces:
+            if _reference_is_known(
+                reference_text, known_namespaces, known_attribute_names, known_attribute_keys
+            ):
                 continue
             findings.append(
                 {

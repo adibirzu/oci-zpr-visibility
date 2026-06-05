@@ -21,8 +21,11 @@ from . import dashboard as dash_mod
 DISPLAY_NAME = "OCI ZPR Visibility"
 DASHBOARD_ID = "oci-zpr-visibility"
 # OCI LA's own relative-time token (NOT ISO-8601 "P30D"); the ISO form makes the
-# JET time binding fail.
-DEFAULT_TIME_PERIOD = {"timePeriod": "l30d"}
+# JET time binding fail. The collector re-emits a full snapshot every run, so a
+# wide default would multiply raw-record table rows; count widgets are made
+# window-independent via two-stage `stats` dedup, and the default window is kept
+# narrow so the raw-record tables show roughly the latest snapshot.
+DEFAULT_TIME_PERIOD = {"timePeriod": "l60m"}
 
 # Per-visualization options modelled on a working OCI LA dashboard export.
 # An EMPTY visualizationOptions object breaks JET viz binding ("reading
@@ -164,7 +167,7 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
             {"paramName": "log-analytics-entity-filter", "displayName": "Entity",
              "paramType": "LogAnalyticsEntity", "defaultValue": "", "isRequired": False},
             {"paramName": "time", "displayName": "Time Range", "paramType": "Time",
-             "defaultValue": "l30d", "isRequired": False},
+             "defaultValue": "l60m", "isRequired": False},
         ],
         "tiles": tiles,
         "savedSearches": saved,
