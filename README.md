@@ -1,5 +1,15 @@
 # OCI ZPR Visibility
 
+> **Zero Trust Packet Routing (ZPR)** secures OCI networks by *security
+> attributes* (labels like `app:web`, `app:db`) and human-readable intent
+> (`in app:fin-network VCN allow app:web endpoints to connect to app:db
+> endpoints`) instead of brittle, topology-based security lists and CIDRs.
+> Policy follows the resource's attributes — not its IP — so network
+> misconfiguration can't override security intent. ZPR *enforces* well but gives
+> limited day-to-day **visibility** into posture, allow/block decisions vs
+> intent, and policy drift. **This project closes that gap.** Full rationale:
+> [docs/zpr-overview.md](docs/zpr-overview.md).
+
 End-to-end starter implementation for OCI Zero Trust Packet Routing visibility:
 
 * Enables tenancy-level ZPR with Terraform or the OCI Python SDK.
@@ -22,6 +32,9 @@ Primary Oracle references:
 
 | Doc | What it covers |
 |-----|----------------|
+| [docs/zpr-overview.md](docs/zpr-overview.md) | **What ZPR is and why it matters** — the case for attribute-based zero-trust routing |
+| [docs/log-format.md](docs/log-format.md) | The ingested JSON record schema (5 record types + fields) and how to view it |
+| [docs/detections.md](docs/detections.md) | ZPR detection rules (labels), conditions, and how to promote them to alerts |
 | [docs/architecture.md](docs/architecture.md) | End-to-end design, ingestion paths, collector internals, detection logic, IAM |
 | [docs/services.md](docs/services.md) | OCI service dependency graph + relationship table |
 | [docs/api-cli-reference.md](docs/api-cli-reference.md) | OCI SDK operations, `oci` CLI commands, app CLI + scripts, Terraform resources |
