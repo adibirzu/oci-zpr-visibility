@@ -36,6 +36,7 @@ VIZ_OPTIONS = {
     "sunburst": _FLAT_OPTS,
     "table": _FLAT_OPTS,
     "tile": _FLAT_OPTS,
+    "link": _FLAT_OPTS,  # network/relationship graph (source -> destination)
 }
 
 
