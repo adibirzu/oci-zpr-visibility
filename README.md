@@ -41,6 +41,7 @@ Primary Oracle references:
 | [docs/runbook.md](docs/runbook.md) | Operator flow: deploy, collect, validate, IAM policies |
 | [docs/validation.md](docs/validation.md) | Live end-to-end validation results in cap (14/14 dashboards) |
 | [docs/orm-deployment.md](docs/orm-deployment.md) | One-click Oracle Resource Manager deployment (full lab + LA + dashboard) |
+| [docs/deployment-modes.md](docs/deployment-modes.md) | Run autonomously in OCI — controller VM vs OCI Function vs Management Agent |
 | [ROADMAP.md](ROADMAP.md) | Long-term, phased enhancement plan |
 
 ## Architecture

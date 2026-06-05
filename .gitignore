@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
+.DS_Store
 .pytest_cache/
 .venv/
 out/
@@ -18,3 +19,8 @@ orm-stack.zip
 orm/.terraform/
 docs/evidence/*.log
 !docs/evidence/*.redacted.log
+
+# Long-form articles are published externally (Medium/Learn OCI), not tracked here.
+# The diagrams they reference (docs/architecture/*) stay committed so the
+# published article can link to them on GitHub.
+docs/article-*.md
