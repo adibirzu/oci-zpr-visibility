@@ -123,7 +123,7 @@
         {
           "name": "Source destination matrix",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats count as rules by source_attribute, destination_attribute",
-          "visualization_type": "link",
+          "visualization_type": "bar",
           "layout": {
             "width": 6,
             "height": 5
