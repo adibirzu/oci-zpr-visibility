@@ -24,10 +24,12 @@ OCI LA console`):
 Verified live: **0 failing widget queries, 0 console error banners** (captured
 via CDP Network on a fresh browser tab).
 
-Live KPI values at capture (Last 60 Minutes window): Active policies **1**,
-Protected resources **5**, Critical+High findings **13**, Blocked flows **0**,
-Unexpected accepted **0**. (Flow KPIs are 0 in a 60-min window because VCN Flow
-Logs lag ~10–15 min; a ≥6h window populates them.)
+Live KPI values at capture (**Last 7 Days** window): Active policies **3**,
+Protected resources **10**, Critical+High findings **231**, Blocked flows
+**23**, Unexpected accepted **26** — all five KPIs populated, including the two
+flow KPIs (VCN Flow Logs lag ~10–15 min, so a ≥6h window is needed for those;
+counts accumulate across the 15-min collector cron over the window). A 60-min
+window shows the policy/resource/finding widgets but 0 flows, which is expected.
 
 ## 2. Security attributes ARE present (`oracle-zpr` namespace)
 
