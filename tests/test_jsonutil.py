@@ -10,14 +10,14 @@ class _FakeOciModel:
     def __init__(self) -> None:
         self.swagger_types = {"id": "str", "zpr_status": "str"}
         self.attribute_map = {"id": "id", "zpr_status": "zprStatus"}
-        self._id = "ocid1.zprconfiguration.oc1..fake"
+        self._id = "fake-zpr-configuration"
         self._zpr_status = "ENABLED"
 
 
 class ToPlainTests(unittest.TestCase):
     def test_drops_oci_sdk_metadata(self):
         out = to_plain(_FakeOciModel())
-        self.assertEqual(out, {"id": "ocid1.zprconfiguration.oc1..fake", "zpr_status": "ENABLED"})
+        self.assertEqual(out, {"id": "fake-zpr-configuration", "zpr_status": "ENABLED"})
         self.assertNotIn("swagger_types", out)
         self.assertNotIn("attribute_map", out)
 

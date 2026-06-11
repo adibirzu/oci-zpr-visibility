@@ -23,7 +23,9 @@ computer" — it already does. Nothing else is required after `terraform apply`.
 
 ```
 */15 * * * * root oci-zpr-visibility refresh --auth instance_principal \
-  --region <region> --state-bucket zpr-visibility-state
+  --region <region> --state-bucket zpr-visibility-state \
+  --flow-log-compartment-id <COMPARTMENT_OCID> \
+  --flow-log-group-id <FLOW_LOG_GROUP_OCID> --flow-log-id <FLOW_LOG_OCID>
 ```
 
 ## 2. OCI Function (serverless)
@@ -36,6 +38,8 @@ invoked event/request-driven (Events, Connector Hub, API Gateway, SDK/CLI);
 there is **no native cron-for-Functions** in core OCI — OCI Resource Scheduler
 only starts/stops Compute and ADB — so for periodic runs invoke it from a
 scheduler you already operate, or use the controller VM for built-in cron.
+Set `FLOW_LOG_COMPARTMENT_ID`, `FLOW_LOG_GROUP_ID`, and `FLOW_LOG_ID` in the
+Function config when you want live traffic KPIs from VCN Flow Logs.
 
 Trade-off: Functions have a 300-second sync timeout — fine for typical tenancies,
 but a very large collection may need the VM mode (or a split cadence with

@@ -34,6 +34,14 @@ def main(argv=None) -> int:
     p.add_argument("--state-bucket", required=True, help="Object Storage bucket holding previous-run state")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--skip-resources", action="store_true")
+    p.add_argument("--flow-log-group-id", default=None,
+                   help="OCI Logging log group OCID holding VCN Flow Logs. When set, refresh "
+                        "fetches + correlates flows into zpr_enriched_flow records (traffic KPIs).")
+    p.add_argument("--flow-log-id", default=None, help="VCN Flow Log OCID within the flow log group.")
+    p.add_argument("--flow-log-compartment-id", default=None,
+                   help="Compartment OCID containing the VCN Flow Log. Defaults to the session tenancy.")
+    p.add_argument("--flow-lookback-minutes", type=int, default=60,
+                   help="How far back to pull flow logs each run (default 60).")
     p.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
 
@@ -41,13 +49,36 @@ def main(argv=None) -> int:
     collector = ZprCollector(session)
     snapshot = collector.collect(include_resources=not args.skip_resources)
     records = collector.records_for_snapshot(snapshot)
-    findings = generate_findings(snapshot, [r for r in records if r.get("record_type") == "zpr_policy_statement"])
+    policy_records = [r for r in records if r.get("record_type") == "zpr_policy_statement"]
+    findings = generate_findings(snapshot, policy_records)
+
+    # Flow correlation (best-effort): turn VCN Flow Logs into classified
+    # zpr_enriched_flow records so the dashboard's traffic KPIs populate. A flow
+    # failure must not break inventory/findings ingestion.
+    flows: list[dict] = []
+    if args.flow_log_group_id and args.flow_log_id:
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            from .correlate import correlate_flow_records
+            from .flow_logs import fetch_flow_logs
+            end = datetime.now(timezone.utc)
+            start = end - timedelta(minutes=args.flow_lookback_minutes)
+            fmt = "%Y-%m-%dT%H:%M:%S.000Z"
+            flow_compartment_id = args.flow_log_compartment_id or session.tenancy_id
+            raw_flows = fetch_flow_logs(
+                session, flow_compartment_id, args.flow_log_group_id, args.flow_log_id,
+                start.strftime(fmt), end.strftime(fmt),
+            )
+            flows = correlate_flow_records(raw_flows, snapshot, policy_records)
+        except Exception as exc:  # noqa: BLE001 - traffic KPIs are best-effort
+            print(f"WARN: flow correlation failed: {getattr(exc, 'message', exc)}", file=sys.stderr)
 
     previous = load_previous_records(session, args.state_bucket)
     drift = compute_drift(previous, records)
     save_records(session, args.state_bucket, records)
 
-    all_records = [*records, *findings, *drift]
+    all_records = [*records, *findings, *drift, *flows]
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
         write_jsonl(Path(fh.name), all_records)
         records_path = fh.name
@@ -67,9 +98,10 @@ def main(argv=None) -> int:
 
     emit(
         {"records": len(records), "findings": len(findings), "drift": len(drift),
-         "uploaded": len(all_records), "metrics_published": published, "provision_rc": rc},
-        f"refresh: {len(records)} records, {len(findings)} findings, {len(drift)} drift -> "
-        f"uploaded {len(all_records)}, {published} metrics (provision rc={rc})",
+         "flows": len(flows), "uploaded": len(all_records), "metrics_published": published,
+         "provision_rc": rc},
+        f"refresh: {len(records)} records, {len(findings)} findings, {len(drift)} drift, "
+        f"{len(flows)} flows -> uploaded {len(all_records)}, {published} metrics (provision rc={rc})",
         args.json,
     )
     return rc

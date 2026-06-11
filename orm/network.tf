@@ -11,6 +11,7 @@ resource "oci_core_vcn" "lab" {
     "oracle-zpr.app.mode"  = "enforce"
   }
   freeform_tags = local.common_tags
+  depends_on    = [time_sleep.zpr_attr_propagation]
 }
 
 resource "oci_core_internet_gateway" "igw" {

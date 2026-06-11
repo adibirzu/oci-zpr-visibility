@@ -1,14 +1,16 @@
 title: "OCI ZPR Visibility Lab"
-description: "Zero Trust Packet Routing visibility: tagged VCN + web/db endpoints, ZPR policy, VCN Flow Logs, and a controller that builds the Log Analytics source, fields, dashboard, and metrics."
+description: "Zero Trust Packet Routing visibility: tagged VCN + web/db endpoints, ZPR policy, VCN Flow Logs, and an autonomous refresh unit (controller VM or serverless OCI Function) that builds the Log Analytics source, fields, dashboard, and metrics."
 schemaVersion: 1.1.0
-version: "1.0.0"
+version: "1.1.0"
 locale: "en"
 
 variableGroups:
   - title: "Placement"
     variables: ["compartment_ocid", "region", "availability_domain"]
   - title: "Lab"
-    variables: ["instance_image_ocid", "ssh_public_key", "enable_controller"]
+    variables: ["instance_image_ocid", "ssh_public_key"]
+  - title: "Autonomy"
+    variables: ["deployment_mode", "function_image"]
   - title: "Hidden"
     variables: ["tenancy_ocid", "package_tarball_path"]
     visible: false
@@ -32,6 +34,7 @@ variables:
   instance_image_ocid:
     type: oci:core:image:id
     title: "Oracle Linux 9 image (E3.Flex)"
+    description: "Image for the web/db endpoint VMs (and the controller VM, if that mode is selected)."
     required: true
     dependsOn:
       compartmentId: ${compartment_ocid}
@@ -39,7 +42,21 @@ variables:
     type: oci:core:ssh:publickey
     title: "SSH public key (optional)"
     required: false
-  enable_controller:
-    type: boolean
-    title: "Auto-provision Log Analytics + dashboard (controller VM)"
-    default: true
+  deployment_mode:
+    type: enum
+    title: "Autonomy mode"
+    description: "How the refresh unit runs. Controller VM: a small VM with a built-in 15-min cron (instance principal), works in any region today. Function: serverless OCI Function (resource principal); push the image with 'fn deploy' and invoke it from Events/Connector Hub/API Gateway/your scheduler (no native cron-for-Functions)."
+    enum:
+      - controller_vm
+      - function
+    default: controller_vm
+    required: true
+  function_image:
+    type: string
+    title: "Function image (OCIR)"
+    description: "OCIR image built with 'fn deploy', e.g. <region>.ocir.io/<namespace>/zpr-visibility-refresh:0.0.1. Leave blank to create only the Functions application + IAM now and add the function later. Only used when Autonomy mode = function."
+    required: false
+    visible:
+      eq:
+        - deployment_mode
+        - function

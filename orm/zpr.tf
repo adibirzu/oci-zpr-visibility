@@ -22,6 +22,16 @@ resource "oci_security_attribute_security_attribute" "app" {
   }
 }
 
+# A newly created ZPR security attribute is not instantly referencable from a
+# resource's security_attributes map (it must propagate). The VCN and endpoint
+# instances reference "oracle-zpr.app.*" as literal strings, so Terraform has no
+# implicit dependency on the attribute above — without this gate they create in
+# parallel and fail with "400-InvalidParameter, Invalid tags". Gate them on this.
+resource "time_sleep" "zpr_attr_propagation" {
+  depends_on      = [oci_security_attribute_security_attribute.app]
+  create_duration = "90s"
+}
+
 resource "oci_zpr_zpr_policy" "demo" {
   compartment_id = var.tenancy_ocid
   name           = "zpr-visibility-demo"

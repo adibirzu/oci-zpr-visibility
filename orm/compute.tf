@@ -56,4 +56,5 @@ resource "oci_core_instance" "endpoint" {
     var.ssh_public_key == "" ? {} : { ssh_authorized_keys = var.ssh_public_key },
   )
   freeform_tags = merge(local.common_tags, { role = each.key })
+  depends_on    = [time_sleep.zpr_attr_propagation]
 }

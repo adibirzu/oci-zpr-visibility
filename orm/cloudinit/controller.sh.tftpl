@@ -31,11 +31,11 @@ export OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibili
 # instance principal (no API keys on the box).
 $BIN provision-la --auth instance_principal --region ${region} --log-group-name ${log_group_name}
 $BIN deploy-dashboard --auth instance_principal --region ${region}
-$BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} || true
+$BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} || true
 
-# Keep refreshing every 15 minutes via cron.
+# Keep refreshing every 15 minutes via cron (with flow correlation for traffic KPIs).
 cat >/etc/cron.d/zpr-refresh <<CRON
 OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
-*/15 * * * * root $BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} >> /var/log/zpr-refresh.log 2>&1
+*/15 * * * * root $BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} >> /var/log/zpr-refresh.log 2>&1
 CRON
 echo "ZPR controller bootstrap complete"

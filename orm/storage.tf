@@ -12,7 +12,7 @@ resource "oci_objectstorage_bucket" "state" {
 }
 
 resource "oci_objectstorage_bucket" "pkg" {
-  count          = var.enable_controller ? 1 : 0
+  count          = local.enable_controller ? 1 : 0
   compartment_id = var.compartment_ocid
   namespace      = data.oci_objectstorage_namespace.ns.namespace
   name           = "${local.name_prefix}-pkg"
@@ -20,7 +20,7 @@ resource "oci_objectstorage_bucket" "pkg" {
 }
 
 resource "oci_objectstorage_object" "pkg" {
-  count        = var.enable_controller ? 1 : 0
+  count        = local.enable_controller ? 1 : 0
   namespace    = data.oci_objectstorage_namespace.ns.namespace
   bucket       = oci_objectstorage_bucket.pkg[0].name
   object       = "oci_zpr_visibility_pkg.tgz"

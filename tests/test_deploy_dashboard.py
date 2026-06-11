@@ -3,7 +3,7 @@ import unittest
 
 from oci_zpr_visibility import dashboard, deploy_dashboard
 
-FAKE_CMPT = "ocid1.tenancy.oc1..fake"
+FAKE_CMPT = "fake-compartment"
 
 
 class BuildManagementDashboardTests(unittest.TestCase):

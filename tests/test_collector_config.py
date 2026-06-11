@@ -9,7 +9,7 @@ class _FakeSession:
     """Minimal stand-in for OciSession (no cloud, no real SDK)."""
 
     oci = None
-    tenancy_id = "ocid1.tenancy.oc1..fake"
+    tenancy_id = "fake-tenancy"
     region = "eu-frankfurt-1"
 
 

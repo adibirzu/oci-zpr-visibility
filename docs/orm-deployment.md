@@ -12,12 +12,16 @@ Resource Manager stack, and apply.
 | `zpr.tf` | `app` security attribute in the `oracle-zpr` namespace + a ZPR policy (web→db allow; broad-CIDR exception) |
 | `compute.tf` | 2 ZPR-tagged endpoints — `web` (app=web) and `db` (app=db) — generating intra-VCN traffic (web→db allowed; db→web denied by ZPR) |
 | `storage.tf` | drift-state bucket + a bucket holding the collector package |
-| `controller.tf` | controller VM + a dynamic group (matching just that instance) + IAM policy; cloud-init installs the collector and runs `provision-la` + `deploy-dashboard` + `refresh` via **instance principal** |
+| `controller.tf` | controller VM + a dynamic group (matching just that instance) + least-privilege IAM policy; cloud-init installs the collector and runs `provision-la` + `deploy-dashboard` + `refresh` via **instance principal** |
+| `functions.tf` | optional OCI Functions application + function resource + resource-principal IAM for `deployment_mode = "function"` |
 
-After apply, the controller (no API keys) builds the LA custom source + 40
-fields + JSON parser, imports the 21-widget dashboard, ingests inventory +
-findings + drift, publishes Monitoring metrics, and installs a 15-minute refresh
-cron — so the dashboard is **live with real data, no manual step**.
+In `controller_vm` mode, after apply the controller (no API keys) builds the LA
+custom source + 40 fields + JSON parser, imports the 29-widget dashboard,
+ingests inventory + findings + drift, publishes Monitoring metrics, and
+installs a 15-minute refresh cron with VCN Flow Log correlation — so the
+dashboard is **live with real data, no manual step**. In `function` mode, the
+stack creates the Functions application, resource-principal IAM, state bucket,
+flow logs, and optional function resource; invoke it through your scheduler.
 
 ## Build the stack zip
 
@@ -29,7 +33,12 @@ scripts/build_orm_zip.sh        # -> orm-stack.zip (terraform + package tarball 
 
 1. **Developer Services → Resource Manager → Stacks → Create stack**.
 2. Source: **.zip file** → upload `orm-stack.zip` (Terraform is at the zip root; `schema.yaml` drives the variable form).
-3. Fill the form: Compartment, Region, Availability Domain, Oracle Linux 9 image (E3.Flex), optional SSH key, and the "auto-provision" toggle.
+3. Fill the form: Compartment, Region, Availability Domain, Oracle Linux 9 image
+   (E3.Flex), optional SSH key, and Autonomy mode.
+   - `controller_vm` is the default: creates the controller VM and built-in
+     15-minute cron.
+   - `function` creates an OCI Functions application and resource-principal IAM;
+     set `function_image` after you push the OCIR image with `fn deploy`.
 4. **Plan** → review → **Apply**.
 5. After ~10–15 min (boot + bootstrap + flow-log latency), open **Log Analytics → Dashboards → OCI ZPR Visibility**.
 
@@ -49,10 +58,11 @@ terraform apply \
 
 ## IAM note
 
-The controller dynamic group is granted `manage all-resources in tenancy` for
-the lab. For production, scope it to the least-privilege set documented in
-`orm/controller.tf` (LA features, management dashboards, ZPR read, security
-attributes read, virtual-network/instance read, object manage, metrics use).
+The controller/function dynamic group is granted the least-privilege set in
+`orm/variables.tf`: Log Analytics features, management dashboards, read access
+for the collector's OCI inventory calls, metrics publishing, and object writes
+to the lab compartment for drift/package state. It does not use the earlier
+lab-only `manage all-resources` grant.
 
 ## Teardown (stop billing)
 
@@ -61,9 +71,11 @@ cd orm && terraform destroy \
   -var config_file_profile=<oci-profile> -var tenancy_ocid=<...> -var compartment_ocid=<...> \
   -var region=<...> -var availability_domain=<...> -var instance_image_ocid=<...>
 ```
-The 3 instances (web, db, controller) are billable while running. LA content +
-dashboard created by the controller persist (they're not Terraform-managed);
-remove them with the OCI console or the SDK if desired.
+The endpoint instances are billable while running. In `controller_vm` mode, the
+controller instance is billable too; in `function` mode, the Function is
+pay-per-use and has no built-in cron. LA content + dashboard created by the
+controller persist (they're not Terraform-managed); remove them with the OCI
+console or the SDK if desired.
 
 ## Idempotency / re-deploy
 

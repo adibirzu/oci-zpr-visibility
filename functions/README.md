@@ -24,6 +24,9 @@ fn -v deploy --app zpr-visibility
 # 4. Configure it
 fn config function zpr-visibility zpr-visibility-refresh STATE_BUCKET zpr-visibility-state
 fn config function zpr-visibility zpr-visibility-refresh REGION <region>
+fn config function zpr-visibility zpr-visibility-refresh FLOW_LOG_COMPARTMENT_ID <COMPARTMENT_OCID>
+fn config function zpr-visibility zpr-visibility-refresh FLOW_LOG_GROUP_ID <FLOW_LOG_GROUP_OCID>
+fn config function zpr-visibility zpr-visibility-refresh FLOW_LOG_ID <FLOW_LOG_OCID>
 
 # 5. Invoke once to verify
 echo '{}' | fn invoke zpr-visibility zpr-visibility-refresh
@@ -37,19 +40,16 @@ the collector needs:
 ```
 # Dynamic group: ALL {resource.type = 'fnfunc', resource.compartment.id = '<COMPARTMENT_OCID>'}
 
-Allow dynamic-group zpr-fn to read zpr-policy in tenancy
-Allow dynamic-group zpr-fn to read security-attribute-namespaces in tenancy
-Allow dynamic-group zpr-fn to read virtual-network-family in tenancy
-Allow dynamic-group zpr-fn to read instance-family in tenancy
-Allow dynamic-group zpr-fn to read compartments in tenancy
-Allow dynamic-group zpr-fn to use loganalytics-ondemand-upload in tenancy
-Allow dynamic-group zpr-fn to use loganalytics-log-group in tenancy
-Allow dynamic-group zpr-fn to read loganalytics-source in tenancy
-Allow dynamic-group zpr-fn to manage objects in tenancy where target.bucket.name = 'zpr-visibility-state'
+Allow dynamic-group zpr-fn to manage loganalytics-features-family in tenancy
+Allow dynamic-group zpr-fn to manage management-dashboard-family in tenancy
+Allow dynamic-group zpr-fn to read all-resources in tenancy
 Allow dynamic-group zpr-fn to use metrics in tenancy
+Allow dynamic-group zpr-fn to manage objects in compartment id <COMPARTMENT_OCID>
 ```
 
-(Scope `in tenancy` down to the relevant compartment for production.)
+The ORM stack creates equivalent statements automatically in Function mode.
+Scope object access further for production if your tenancy policy budget allows
+bucket-level conditions.
 
 ## Scheduling (so it runs all the time)
 
@@ -79,3 +79,6 @@ or when you already have a scheduler.
   separate cadence).
 - This function runs `refresh` only (it does not import the dashboard). Deploy the
   dashboard once with `deploy-dashboard` (or let the ORM controller do it).
+- Set the `FLOW_LOG_*` config keys to populate traffic KPIs from live VCN Flow
+  Logs. Without them the Function still uploads inventory, findings, drift, and
+  metrics.

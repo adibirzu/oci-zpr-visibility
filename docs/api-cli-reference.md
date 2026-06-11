@@ -17,6 +17,7 @@ Console entry point `oci_zpr_visibility.cli:main`. Auth flags on cloud commands:
 | `findings` | Generate findings from an existing snapshot | no | — (local) |
 | `correlate` | Correlate JSONL VCN flow logs with a snapshot | no | — (local) |
 | `emit` | Emit JSONL records to an OCI custom log | yes | `LoggingClient.put_logs` |
+| `refresh` | Scheduled unit: collect → drift → upload → metrics; optional live VCN Flow Log correlation with `--flow-log-compartment-id`, `--flow-log-group-id`, `--flow-log-id` | yes | ZPR, Security Attributes, Core, Object Storage, Log Analytics, Logging Search, Monitoring |
 | `demo` | Run sample data through findings + correlation | no | — (local) |
 
 ### Consolidated operational subcommands
@@ -48,6 +49,7 @@ Clients are built lazily in `oci_zpr_visibility/oci_clients.py` via
 | Core — Compute | `oci.core.ComputeClient` | `list_vnic_attachments` | collector (VNIC enrichment) |
 | Core — Network | `oci.core.VirtualNetworkClient` | `get_vnic`, `list_private_ips` | collector (IP enrichment) |
 | Logging Ingestion | `oci.loggingingestion.LoggingClient` | `put_logs` (PutLogsDetails / LogEntryBatch) | `emit` |
+| Logging Search | `oci.loggingsearch.LogSearchClient` | `search_logs` | `correlate`, `refresh` live VCN Flow Log fetch |
 | Log Analytics | `oci.log_analytics.LogAnalyticsClient` | `upsert_field`, `upsert_parser`, `upsert_source`, `get_parser`, `get_source`, `list_sources`, `create_log_analytics_log_group`, `list_log_analytics_log_groups`, `upload_log_file`, `query`, `parse_query` | `provision_la`, `validate_dashboards` |
 | Object Storage | `oci.object_storage.ObjectStorageClient` | `get_namespace` (resolve LA namespace) | `provision_la`, `validate_dashboards` |
 

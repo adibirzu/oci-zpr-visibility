@@ -3,7 +3,7 @@
 # matching exactly this instance.
 
 resource "oci_core_instance" "controller" {
-  count               = var.enable_controller ? 1 : 0
+  count               = local.enable_controller ? 1 : 0
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
   display_name        = "${local.name_prefix}-controller"
@@ -23,11 +23,14 @@ resource "oci_core_instance" "controller" {
   metadata = merge(
     {
       user_data = base64encode(templatefile("${path.module}/cloudinit/controller.sh.tftpl", {
-        region         = var.region
-        log_group_name = "${local.name_prefix}-la"
-        state_bucket   = oci_objectstorage_bucket.state.name
-        pkg_bucket     = oci_objectstorage_bucket.pkg[0].name
-        pkg_object     = oci_objectstorage_object.pkg[0].object
+        region              = var.region
+        log_group_name      = "${local.name_prefix}-la"
+        state_bucket        = oci_objectstorage_bucket.state.name
+        pkg_bucket          = oci_objectstorage_bucket.pkg[0].name
+        pkg_object          = oci_objectstorage_object.pkg[0].object
+        flow_compartment_id = var.compartment_ocid
+        flow_log_group_id   = oci_logging_log_group.flow.id
+        flow_log_id         = oci_logging_log.subnet_flow.id
       }))
     },
     var.ssh_public_key == "" ? {} : { ssh_authorized_keys = var.ssh_public_key },
@@ -36,7 +39,7 @@ resource "oci_core_instance" "controller" {
 }
 
 resource "oci_identity_dynamic_group" "controller" {
-  count          = var.enable_controller ? 1 : 0
+  count          = local.enable_controller ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name_prefix}-controller-dg"
   description    = "ZPR visibility controller instance"
@@ -44,15 +47,12 @@ resource "oci_identity_dynamic_group" "controller" {
 }
 
 resource "oci_identity_policy" "controller" {
-  count          = var.enable_controller ? 1 : 0
+  count          = local.enable_controller ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name_prefix}-controller-policy"
-  description    = "Grants the ZPR visibility controller the access it needs"
-  # Lab grant: broad but valid. For production, scope to:
-  #   manage loganalytics-features-family, manage management-dashboard-family,
-  #   read zpr-policy, read security-attribute-namespaces, read virtual-network-family,
-  #   read instance-family, read compartments, manage objects (state/pkg buckets), use metrics.
+  description    = "Least-privilege grants for the ZPR visibility controller (instance principal)."
   statements = [
-    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to manage all-resources in tenancy",
+    for g in local.refresh_grants :
+    "Allow dynamic-group ${oci_identity_dynamic_group.controller[0].name} to ${g.perm} in ${g.scope}"
   ]
 }
