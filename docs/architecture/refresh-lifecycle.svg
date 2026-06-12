@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">OCI ZPR Visibility refresh lifecycle</title>
+  <desc id="desc">A refresh run collects ZPR inventory, fetches flow logs, correlates traffic, computes drift, writes a temporary JSONL file, uploads to Log Analytics, saves state, and publishes metrics.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a2e1f"/>
+    </marker>
+    <style>
+      .bg { fill: #fbfaf8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #231f20; }
+      .subtitle { font: 16px Arial, sans-serif; fill: #5f5a56; }
+      .step { fill: #ffffff; stroke: #cfc7bf; stroke-width: 2; rx: 10; }
+      .step-red { fill: #fff4f0; stroke: #b9472b; stroke-width: 2; rx: 10; }
+      .store { fill: #f1f6fb; stroke: #527a9c; stroke-width: 2; rx: 10; }
+      .label { font: 700 17px Arial, sans-serif; fill: #231f20; }
+      .body { font: 13px Arial, sans-serif; fill: #3d3935; }
+      .small { font: 12px Arial, sans-serif; fill: #5f5a56; }
+      .arrow { stroke: #7a2e1f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .soft { stroke: #8d8580; stroke-width: 2; stroke-dasharray: 7 6; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1280" height="760"/>
+  <text x="60" y="58" class="title">What happens during one refresh run</text>
+  <text x="60" y="86" class="subtitle">The same unit runs from controller cron, OCI Functions, OKE CronJob, or a local operator command.</text>
+
+  <rect x="60" y="140" width="190" height="92" class="step"/>
+  <text x="85" y="178" class="label">Trigger</text>
+  <text x="85" y="204" class="body">cron / Function / CLI</text>
+
+  <rect x="300" y="140" width="190" height="92" class="step"/>
+  <text x="325" y="173" class="label">Collect snapshot</text>
+  <text x="325" y="199" class="body">ZPR, Security Attributes,</text>
+  <text x="325" y="218" class="body">Core inventory</text>
+
+  <rect x="540" y="140" width="190" height="92" class="step-red"/>
+  <text x="565" y="173" class="label">Fetch flow logs</text>
+  <text x="565" y="199" class="body">Logging Search over</text>
+  <text x="565" y="218" class="body">recent VCN Flow Logs</text>
+
+  <rect x="780" y="140" width="190" height="92" class="step-red"/>
+  <text x="805" y="173" class="label">Correlate</text>
+  <text x="805" y="199" class="body">Map IPs to resources,</text>
+  <text x="805" y="218" class="body">classify traffic vs intent</text>
+
+  <rect x="1030" y="140" width="190" height="92" class="step"/>
+  <text x="1055" y="173" class="label">Generate records</text>
+  <text x="1055" y="199" class="body">inventory, findings, drift,</text>
+  <text x="1055" y="218" class="body">enriched flows</text>
+
+  <rect x="300" y="340" width="190" height="92" class="store"/>
+  <text x="325" y="373" class="label">Object Storage</text>
+  <text x="325" y="399" class="body">Load/save previous run</text>
+  <text x="325" y="418" class="body">for drift baseline</text>
+
+  <rect x="540" y="340" width="190" height="92" class="step"/>
+  <text x="565" y="373" class="label">Temp JSONL</text>
+  <text x="565" y="399" class="body">/tmp/*.jsonl exists only</text>
+  <text x="565" y="418" class="body">long enough to upload</text>
+
+  <rect x="780" y="340" width="190" height="92" class="store"/>
+  <text x="805" y="373" class="label">Log Analytics</text>
+  <text x="805" y="399" class="body">Upload API parses into</text>
+  <text x="805" y="418" class="body">custom source fields</text>
+
+  <rect x="1030" y="340" width="190" height="92" class="store"/>
+  <text x="1055" y="373" class="label">Monitoring</text>
+  <text x="1055" y="399" class="body">Publish heartbeat,</text>
+  <text x="1055" y="418" class="body">finding and flow metrics</text>
+
+  <rect x="540" y="540" width="430" height="84" class="step"/>
+  <text x="565" y="573" class="label">Best-effort traffic enrichment</text>
+  <text x="565" y="599" class="body">If flow-log fetch or correlation fails, refresh still uploads</text>
+  <text x="565" y="618" class="body">inventory, findings, drift and metrics for the run.</text>
+
+  <path class="arrow" d="M 250 186 L 300 186"/>
+  <path class="arrow" d="M 490 186 L 540 186"/>
+  <path class="arrow" d="M 730 186 L 780 186"/>
+  <path class="arrow" d="M 970 186 L 1030 186"/>
+  <path class="arrow" d="M 1125 232 C 1125 290 640 290 640 340"/>
+  <path class="arrow" d="M 730 386 L 780 386"/>
+  <path class="arrow" d="M 970 386 L 1030 386"/>
+  <path class="soft" d="M 395 340 C 395 295 410 255 455 232"/>
+  <path class="soft" d="M 395 432 C 395 495 565 500 650 540"/>
+  <path class="soft" d="M 635 232 C 635 455 700 500 725 540"/>
+  <text x="77" y="690" class="small">Record types: zpr_policy_statement, zpr_resource, zpr_finding, zpr_policy_drift, zpr_enriched_flow.</text>
+</svg>

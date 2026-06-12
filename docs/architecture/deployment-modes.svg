@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">OCI ZPR Visibility deployment modes</title>
+  <desc id="desc">Resource Manager can deploy the ZPR Visibility refresh unit as a controller VM with built-in cron or as an OCI Function with resource principal IAM and external scheduling.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfaf8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #231f20; }
+      .subtitle { font: 16px Arial, sans-serif; fill: #5f5a56; }
+      .panel { fill: #ffffff; stroke: #cfc7bf; stroke-width: 2; rx: 12; }
+      .panel-red { fill: #fff4f0; stroke: #b9472b; stroke-width: 2; rx: 12; }
+      .common { fill: #f1f6fb; stroke: #527a9c; stroke-width: 2; rx: 12; }
+      .label { font: 700 20px Arial, sans-serif; fill: #231f20; }
+      .body { font: 15px Arial, sans-serif; fill: #3d3935; }
+      .small { font: 13px Arial, sans-serif; fill: #5f5a56; }
+      .check { font: 700 15px Arial, sans-serif; fill: #7a2e1f; }
+      .divider { stroke: #ddd5ce; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1280" height="760"/>
+  <text x="60" y="58" class="title">Two Resource Manager autonomy modes</text>
+  <text x="60" y="86" class="subtitle">Both modes create the same lab foundation and use OCI principals. The difference is how refresh is invoked.</text>
+
+  <rect x="80" y="130" width="500" height="420" class="panel-red"/>
+  <text x="115" y="172" class="label">deployment_mode = controller_vm</text>
+  <line x1="115" y1="195" x2="545" y2="195" class="divider"/>
+  <text x="115" y="232" class="check">Runtime</text>
+  <text x="230" y="232" class="body">Small Compute VM</text>
+  <text x="115" y="270" class="check">Auth</text>
+  <text x="230" y="270" class="body">Instance principal</text>
+  <text x="115" y="308" class="check">Schedule</text>
+  <text x="230" y="308" class="body">Built-in 15-minute cron</text>
+  <text x="115" y="346" class="check">Bootstraps</text>
+  <text x="230" y="346" class="body">Log Analytics + dashboard + first refresh</text>
+  <text x="115" y="384" class="check">Best for</text>
+  <text x="230" y="384" class="body">Zero external dependencies</text>
+  <text x="230" y="410" class="body">and periodic collection today</text>
+  <text x="115" y="472" class="small">Default path for "apply and walk away".</text>
+
+  <rect x="700" y="130" width="500" height="420" class="panel"/>
+  <text x="735" y="172" class="label">deployment_mode = function</text>
+  <line x1="735" y1="195" x2="1165" y2="195" class="divider"/>
+  <text x="735" y="232" class="check">Runtime</text>
+  <text x="850" y="232" class="body">OCI Functions</text>
+  <text x="735" y="270" class="check">Auth</text>
+  <text x="850" y="270" class="body">Resource principal</text>
+  <text x="735" y="308" class="check">Schedule</text>
+  <text x="850" y="308" class="body">Events, API Gateway, SDK/CLI,</text>
+  <text x="850" y="331" class="body">or a scheduler you operate</text>
+  <text x="735" y="369" class="check">Bootstraps</text>
+  <text x="850" y="369" class="body">Function app + IAM now;</text>
+  <text x="850" y="392" class="body">function after function_image is set</text>
+  <text x="735" y="430" class="check">Best for</text>
+  <text x="850" y="430" class="body">Serverless / on-demand runs</text>
+  <text x="735" y="492" class="small">No native cron-for-Functions in core OCI.</text>
+
+  <rect x="170" y="605" width="940" height="90" class="common"/>
+  <text x="205" y="642" class="label">Shared foundation</text>
+  <text x="405" y="642" class="body">ZPR-tagged VCN + web/db endpoints + VCN Flow Logs + state bucket</text>
+  <text x="405" y="668" class="body">least-privilege dynamic-group policy + Log Analytics source/dashboard records</text>
+</svg>

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">OCI ZPR Visibility data sources</title>
+  <desc id="desc">ZPR visibility is assembled from control-plane APIs, Core resource APIs, and VCN Flow Logs, then normalized by the collector into a custom Log Analytics source and dashboard.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a2e1f"/>
+    </marker>
+    <style>
+      .bg { fill: #fbfaf8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #231f20; }
+      .subtitle { font: 16px Arial, sans-serif; fill: #5f5a56; }
+      .box { fill: #ffffff; stroke: #cfc7bf; stroke-width: 2; rx: 10; }
+      .box-red { fill: #fff4f0; stroke: #b9472b; stroke-width: 2; rx: 10; }
+      .box-blue { fill: #f1f6fb; stroke: #527a9c; stroke-width: 2; rx: 10; }
+      .label { font: 700 18px Arial, sans-serif; fill: #231f20; }
+      .body { font: 14px Arial, sans-serif; fill: #3d3935; }
+      .note { font: 700 15px Arial, sans-serif; fill: #8f2f1d; }
+      .small { font: 13px Arial, sans-serif; fill: #5f5a56; }
+      .arrow { stroke: #7a2e1f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #8d8580; stroke-width: 2; stroke-dasharray: 7 6; fill: none; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="720"/>
+  <text x="60" y="58" class="title">ZPR visibility is assembled, not emitted</text>
+  <text x="60" y="86" class="subtitle">There is no native ZPR decision log. The collector joins API state with VCN Flow Logs and uploads a normalized view.</text>
+
+  <rect x="60" y="140" width="300" height="120" class="box"/>
+  <text x="85" y="178" class="label">ZPR control plane</text>
+  <text x="85" y="207" class="body">Configuration, policies, ZPL</text>
+  <text x="85" y="230" class="body">statements, security attributes</text>
+
+  <rect x="60" y="300" width="300" height="120" class="box"/>
+  <text x="85" y="338" class="label">Core resource APIs</text>
+  <text x="85" y="367" class="body">VCNs, instances, VNICs,</text>
+  <text x="85" y="390" class="body">private IPs, resource attributes</text>
+
+  <rect x="60" y="460" width="300" height="120" class="box"/>
+  <text x="85" y="498" class="label">OCI Logging</text>
+  <text x="85" y="527" class="body">VCN Flow Logs with ACCEPT /</text>
+  <text x="85" y="550" class="body">REJECT network decisions</text>
+
+  <rect x="445" y="250" width="310" height="180" class="box-red"/>
+  <text x="475" y="292" class="label">ZPR Visibility Collector</text>
+  <text x="475" y="325" class="body">1. Normalize inventory and policy</text>
+  <text x="475" y="350" class="body">2. Map flows to source/destination IPs</text>
+  <text x="475" y="375" class="body">3. Classify observed traffic vs intent</text>
+  <text x="475" y="400" class="body">4. Emit JSONL records</text>
+
+  <rect x="845" y="170" width="285" height="120" class="box-blue"/>
+  <text x="875" y="208" class="label">Custom LA source</text>
+  <text x="875" y="237" class="body">OCI ZPR Visibility JSON</text>
+  <text x="875" y="260" class="body">fields + parser + log group</text>
+
+  <rect x="845" y="390" width="285" height="120" class="box-blue"/>
+  <text x="875" y="428" class="label">Dashboard + detections</text>
+  <text x="875" y="457" class="body">Posture, policy, traffic, drift,</text>
+  <text x="875" y="480" class="body">finding and alert-ready queries</text>
+
+  <path class="arrow" d="M 360 200 C 405 200 405 295 445 295"/>
+  <path class="arrow" d="M 360 360 C 405 360 405 340 445 340"/>
+  <path class="arrow" d="M 360 520 C 405 520 405 385 445 385"/>
+  <path class="arrow" d="M 755 325 C 805 325 805 230 845 230"/>
+  <path class="arrow" d="M 988 290 L 988 390"/>
+
+  <rect x="450" y="540" width="300" height="76" class="box"/>
+  <text x="475" y="570" class="note">Important limitation</text>
+  <text x="475" y="595" class="small">VCN Flow Logs do not say "ZPR denied this".</text>
+  <text x="475" y="615" class="small">The project infers intent by correlation.</text>
+  <path class="dash" d="M 600 540 C 610 500 685 475 845 455"/>
+</svg>

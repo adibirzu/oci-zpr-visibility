@@ -1,5 +1,17 @@
 # Architecture diagrams
 
+## Article figures
+
+These SVGs are lightweight article figures intended for direct Markdown embeds
+from `raw.githubusercontent.com`:
+
+- `zpr-data-sources.svg` — why ZPR visibility is assembled from APIs + VCN Flow
+  Logs instead of emitted as a native ZPR log.
+- `refresh-lifecycle.svg` — one `refresh` run from trigger through collection,
+  flow correlation, JSONL upload, state persistence, and metrics.
+- `deployment-modes.svg` — Resource Manager `controller_vm` vs `function` mode,
+  including auth, scheduling, and shared foundation resources.
+
 ## `oci-zpr-visibility-pipeline.excalidraw`
 
 The end-to-end data pipeline (collect → normalize → Upload API → Log Analytics →
