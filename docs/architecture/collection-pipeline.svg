@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="720" viewBox="0 0 940 720" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5b6470"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title  { font-size: 15px; font-weight: 700; fill: #16212e; }
+      .sub    { font-size: 12px; fill: #4a5563; }
+      .mono   { font-size: 11.5px; fill: #334; font-family: "SF Mono", Menlo, Consolas, monospace; }
+      .step   { font-size: 12px; font-weight: 700; fill: #c74634; }
+      .edge   { stroke: #5b6470; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .src    { fill: #eef4fb; stroke: #b9d2ee; stroke-width: 1.3; }
+      .proc   { fill: #ffffff; stroke: #d8dde4; stroke-width: 1.3; }
+      .la     { fill: #fbf2f0; stroke: #e6b9b0; stroke-width: 1.3; }
+      .accentbar { fill: #c74634; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="940" height="720" fill="#ffffff"/>
+  <text x="30" y="34" class="title" font-size="17">OCI ZPR Visibility — collection &amp; ingestion pipeline</text>
+
+  <!-- Sources -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="56" width="420" height="74" rx="9" class="src"/>
+    <rect x="490" y="56" width="420" height="74" rx="9" class="src"/>
+  </g>
+  <text x="50" y="84" class="title">OCI ZPR · Security Attributes · Core APIs</text>
+  <text x="50" y="106" class="sub">read-only SDK · instance / resource principal</text>
+  <text x="50" y="122" class="mono">ZprClient · SecurityAttributeClient · list_vcns / list_instances</text>
+  <text x="510" y="84" class="title">VCN Flow Logs</text>
+  <text x="510" y="106" class="sub">OCI Logging — the only ACCEPT / REJECT source</text>
+  <text x="510" y="122" class="mono">no ZPR deny-reason field → correlate by 5-tuple</text>
+
+  <!-- arrows sources -> collect -->
+  <path class="edge" d="M240 130 L240 162"/>
+  <path class="edge" d="M700 130 L700 150 L470 150 L470 162"/>
+
+  <!-- collect -->
+  <g filter="url(#shadow)"><rect x="30" y="164" width="880" height="66" rx="9" class="proc"/></g>
+  <rect x="30" y="164" width="5" height="66" rx="2" class="accentbar"/>
+  <text x="50" y="190" class="step">1 · collect</text>
+  <text x="135" y="190" class="title">ZprCollector.collect → snapshot</text>
+  <text x="50" y="214" class="mono">policies · oracle-zpr attributes · protected resources (VCN/instances)  +  flow 5-tuples</text>
+
+  <path class="edge" d="M470 230 L470 262"/>
+
+  <!-- normalize -->
+  <g filter="url(#shadow)"><rect x="30" y="264" width="880" height="80" rx="9" class="proc"/></g>
+  <rect x="30" y="264" width="5" height="80" rx="2" class="accentbar"/>
+  <text x="50" y="290" class="step">2 · normalize</text>
+  <text x="155" y="290" class="title">policy_parser · findings · correlate · state  →  records.jsonl</text>
+  <text x="50" y="314" class="sub">one JSON object per line, each tagged with a record_type:</text>
+  <text x="50" y="334" class="mono">zpr_policy_statement · zpr_resource · zpr_finding · zpr_enriched_flow · zpr_policy_drift   (+ shared snapshot_time)</text>
+
+  <path class="edge" d="M470 344 L470 376"/>
+
+  <!-- provision + upload -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="378" width="425" height="92" rx="9" class="proc"/>
+    <rect x="485" y="378" width="425" height="92" rx="9" class="proc"/>
+  </g>
+  <rect x="30" y="378" width="5" height="92" rx="2" class="accentbar"/>
+  <rect x="485" y="378" width="5" height="92" rx="2" class="accentbar"/>
+  <text x="50" y="404" class="step">3 · provision-la</text>
+  <text x="170" y="404" class="sub">idempotent</text>
+  <text x="50" y="426" class="mono">~42 custom fields</text>
+  <text x="50" y="444" class="mono">JSON parser  $.&lt;key&gt; → field</text>
+  <text x="50" y="462" class="mono">custom source + log group · Time ⟵ snapshot_time</text>
+  <text x="505" y="404" class="step">4 · upload</text>
+  <text x="600" y="404" class="sub">LA Upload API</text>
+  <text x="505" y="426" class="mono">upload_log_file streams the JSONL</text>
+  <text x="505" y="444" class="mono">parser extracts every field</text>
+  <text x="505" y="462" class="mono">records become queryable</text>
+
+  <!-- provision -> upload -->
+  <path class="edge" d="M455 424 L485 424"/>
+  <!-- both -> LA -->
+  <path class="edge" d="M242 470 L242 492 L470 492 L470 514"/>
+  <path class="edge" d="M697 470 L697 492 L470 492" fill="none" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- LA store -->
+  <g filter="url(#shadow)"><rect x="30" y="516" width="880" height="64" rx="9" class="la"/></g>
+  <text x="50" y="542" class="title">OCI Log Analytics</text>
+  <text x="50" y="564" class="mono">source: 'OCI ZPR Visibility JSON'   ·   log group: zpr-visibility-la   ·   query: 'Log Source' = 'OCI ZPR Visibility JSON'</text>
+
+  <path class="edge" d="M470 580 L470 612"/>
+
+  <!-- dashboard -->
+  <g filter="url(#shadow)"><rect x="30" y="614" width="880" height="74" rx="9" class="proc"/></g>
+  <rect x="30" y="614" width="5" height="74" rx="2" class="accentbar"/>
+  <text x="50" y="640" class="step">5 · deploy-dashboard / refresh</text>
+  <text x="280" y="640" class="title">Management Dashboard — 30 widgets / 6 tabs</text>
+  <text x="50" y="664" class="mono">+ OCI Monitoring metrics + alarms   ·   refresh re-runs collect → upload every 15 min (controller VM / OCI Function)</text>
+</svg>

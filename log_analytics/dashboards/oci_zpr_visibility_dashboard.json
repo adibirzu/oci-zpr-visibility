@@ -385,6 +385,16 @@
           "visualization_options": {}
         },
         {
+          "name": "Detection: blocked to protected (ZPR-Blocked-Protected)",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | eval Detection = 'ZPR-Blocked-Protected' | fields Detection, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 4
+          },
+          "visualization_options": {}
+        },
+        {
           "name": "Detection: broad CIDR exceptions (ZPR-Broad-CIDR)",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_finding' and finding_type = 'broad_cidr_exception' | eval Detection = 'ZPR-Broad-CIDR' | fields Detection, severity, policy_name, cidr, recommendation",
           "visualization_type": "table",

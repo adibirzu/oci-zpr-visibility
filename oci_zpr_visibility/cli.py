@@ -191,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 # (subcommand, package module under oci_zpr_visibility, help text)
 _DELEGATED_SUBCOMMANDS = [
+    ("discover", "discover", "Discover an existing tenancy's ZPR setup + print continuous-collection steps."),
     ("provision-la", "provision_la", "Provision LA fields/parser/source/log group; --upload to ingest records."),
     ("validate-dashboards", "validate_dashboards", "Execute dashboard queries against live LA (HIT/MISS/ERROR)."),
     ("seed", "seed", "Create the 'app' security attribute and a real ZPR policy."),

@@ -1,5 +1,13 @@
 # OCI ZPR Visibility
 
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/adibirzu/oci-zpr-visibility/raw/main/orm-stack.zip)
+
+One click deploys the **full demo** (ZPR-tagged VCN, `web`/`db` endpoints, a ZPR
+policy, VCN Flow Logs, Log Analytics source + dashboard, and a 15-minute refresh
+loop) into your tenancy via Oracle Resource Manager. Already run ZPR? Skip the
+demo and point this at your real setup — see
+[**Use it on your existing ZPR setup**](docs/discovery.md).
+
 > **Zero Trust Packet Routing (ZPR)** secures OCI networks by *security
 > attributes* (labels like `app:web`, `app:db`) and human-readable intent
 > (`in app:fin-network VCN allow app:web endpoints to connect to app:db
@@ -12,12 +20,16 @@
 
 End-to-end starter implementation for OCI Zero Trust Packet Routing visibility:
 
-* Enables tenancy-level ZPR with Terraform or the OCI Python SDK.
+* Works alongside tenancy-level ZPR (enable once via Terraform `oci_zpr_configuration` or the SDK; the stack assumes ZPR is already active and creates the demo policy).
 * Enables OCI VCN Flow Logs into OCI Logging.
 * Routes flow logs and custom ZPR inventory records to OCI Log Analytics through Connector Hub.
 * Collects ZPR configuration, policies, security attributes, protected resources, and IP/resource mappings.
 * Emits normalized policy, resource, finding, and enriched flow records.
-* Provides Log Analytics source and dashboard query assets.
+* Provides a Log Analytics custom source and a 30-widget Management Dashboard across 6 tabs.
+
+![OCI ZPR Visibility — Executive posture dashboard](docs/evidence/screenshots/redacted/exec-posture.png)
+
+> *The Executive posture tab: active policies, protected resources, critical/high findings, blocked flows, and unexpected-accepted KPIs, with the policy statement table below. Live data from a demo tenancy; OCIDs and IPs are masked.*
 
 Oracle’s current ZPR SDK exposes `ZprClient` methods including `create_configuration`, `get_configuration`, `list_zpr_policies`, and `get_zpr_policy`. The OCI Terraform provider exposes `oci_zpr_configuration` to onboard ZPR in the root compartment. VCN Flow Logs expose ACCEPT/REJECT network decisions and fields such as source/destination address, protocol, VNIC OCID, subnet OCID, and compartment OCID; they do not provide a dedicated ZPR deny-reason field, so this project uses explicit policy/resource correlation.
 
@@ -41,6 +53,7 @@ Primary Oracle references:
 | [docs/runbook.md](docs/runbook.md) | Operator flow: deploy, collect, validate, IAM policies |
 | [docs/validation.md](docs/validation.md) | Live end-to-end validation results in cap (14/14 dashboards) |
 | [docs/orm-deployment.md](docs/orm-deployment.md) | One-click Oracle Resource Manager deployment (full lab + LA + dashboard) |
+| [docs/discovery.md](docs/discovery.md) | **Use it on your existing ZPR setup** — discover, then stand up continuous collection |
 | [docs/deployment-modes.md](docs/deployment-modes.md) | Run autonomously in OCI — controller VM vs OCI Function vs Management Agent |
 | [ROADMAP.md](ROADMAP.md) | Long-term, phased enhancement plan |
 
@@ -48,19 +61,7 @@ Primary Oracle references:
 
 ### How logs are collected and sent to Log Analytics
 
-```
- OCI ZPR / Security Attributes / Core APIs        VCN Flow Logs (OCI Logging)
-        │  (read-only SDK, instance principal)              │
-        ▼                                                   ▼
-  ZprCollector.collect ── snapshot ──▶ normalize ──▶ records.jsonl
-   policies · attributes · resources    policy_parser/findings/correlate/state
-        │                                   (record_type per line)
-        ▼  provision-la (idempotent)        ▼  upload_log_file (LA Upload API)
-   fields + JSON parser + custom source ───▶  "OCI ZPR Visibility JSON"  ──▶  Log group
-   "OCI ZPR Visibility JSON" + log group        parser extracts fields,            │
-        │                                        Time ⟵ snapshot_time               ▼
-        └────────────── deploy-dashboard ──▶ Management Dashboard + metrics + alarms
-```
+![OCI ZPR Visibility collection & ingestion pipeline](docs/architecture/collection-pipeline.svg)
 
 1. **Collect** — read ZPR config/policies, the `oracle-zpr` security attributes,
    and protected resources (VCN/instances via Core APIs, since Resource Search
@@ -81,6 +82,46 @@ Full design (component diagram, collector internals, detection model, IAM):
 [docs/log-format.md](docs/log-format.md). Detection rules:
 [docs/detections.md](docs/detections.md).
 
+## What the dashboard shows
+
+The Management Dashboard ships as **30 widgets across 6 tabs**, each answering one
+class of question. Screenshots below are from a live demo tenancy (OCIDs and IPs masked).
+
+**Allow / block traffic — real flows correlated against policy intent**
+
+![Allow/block traffic](docs/evidence/screenshots/redacted/allow-block-traffic.png)
+
+**Policy inventory — every ZPR statement decomposed (source/destination/scope/target), with broad-CIDR exceptions flagged**
+
+![Policy inventory](docs/evidence/screenshots/redacted/policy-inventory.png)
+
+**Protected resource map — what carries `oracle-zpr` attributes, and which resources have no governing policy**
+
+![Protected resource map](docs/evidence/screenshots/redacted/resource-map.png)
+
+**Detections — each violation class tagged with a `Detection` label, one step from an alert**
+
+![Detections](docs/evidence/screenshots/redacted/detections.png)
+
+**Everything is just a query — run the same searches yourself in Log Explorer**
+
+![Over-permissive detection query](docs/evidence/screenshots/redacted/query-over-permissive.png)
+
+## Use it on your existing ZPR setup
+
+Already running ZPR? Skip the demo lab. `discover` does a read-only survey of your
+tenancy and prints the exact commands (with your flow-log OCIDs) to stand up the
+same continuous collection:
+
+```bash
+oci-zpr-visibility discover --auth api_key --profile <profile> --region <region>
+```
+
+It reports ZPR enablement, policies, `oracle-zpr` attributes, protected
+resources, and the VCN Flow Logs it found (tenancy root + compartment subtree),
+then emits the `provision-la` → `refresh` → `deploy-dashboard` steps and how to
+schedule them. Full guide: [docs/discovery.md](docs/discovery.md).
+
 ## Install
 
 Use an isolated virtual environment so the project's `oci>=2.176.0` does not
@@ -98,6 +139,7 @@ Exposed via the main CLI (and as thin `scripts/*.py` shims for legacy paths):
 
 | Subcommand | Purpose |
 |------------|---------|
+| `oci-zpr-visibility discover` | **Read-only** survey of an existing tenancy's ZPR (config, policies, attributes, protected resources, VCN Flow Logs) + the exact continuous-collection commands. |
 | `oci-zpr-visibility seed` | Create the `app` security attribute + a real ZPR policy (the rule). |
 | `oci-zpr-visibility trigger` | Generate flows exercising every detection classification (offline trigger; production uses VCN Flow Logs). |
 | `oci-zpr-visibility provision-la` | Idempotently create LA custom fields, JSON parser, source, log group; `--upload` ingests records. |
@@ -107,6 +149,11 @@ Exposed via the main CLI (and as thin `scripts/*.py` shims for legacy paths):
 
 For one-click provisioning of the whole lab + LA content + dashboard, use the
 **Oracle Resource Manager** stack — see [docs/orm-deployment.md](docs/orm-deployment.md).
+
+Three ways to run it autonomously inside OCI (no laptop in the loop) — controller VM,
+OCI Function, or Management Agent host:
+
+![Deployment modes](docs/architecture/deployment-modes.svg)
 
 See [docs/api-cli-reference.md](docs/api-cli-reference.md) for the full surface
 and [docs/validation.md](docs/validation.md) for the end-to-end validation run.
