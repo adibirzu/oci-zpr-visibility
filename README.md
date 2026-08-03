@@ -25,7 +25,7 @@ End-to-end starter implementation for OCI Zero Trust Packet Routing visibility:
 * Routes flow logs and custom ZPR inventory records to OCI Log Analytics through Connector Hub.
 * Collects ZPR configuration, policies, security attributes, protected resources, and IP/resource mappings.
 * Emits normalized policy, resource, finding, and enriched flow records.
-* Provides a Log Analytics custom source and a 30-widget Management Dashboard across 6 tabs.
+* Provides a Log Analytics custom source and a 40-widget Management Dashboard suite across 7 focused views.
 
 ![OCI ZPR Visibility — Executive posture dashboard](docs/evidence/screenshots/redacted/exec-posture.png)
 
@@ -51,7 +51,7 @@ Primary Oracle references:
 | [docs/services.md](docs/services.md) | OCI service dependency graph + relationship table |
 | [docs/api-cli-reference.md](docs/api-cli-reference.md) | OCI SDK operations, `oci` CLI commands, app CLI + scripts, Terraform resources |
 | [docs/runbook.md](docs/runbook.md) | Operator flow: deploy, collect, validate, IAM policies |
-| [docs/validation.md](docs/validation.md) | Live end-to-end validation results in cap (14/14 dashboards) |
+| [docs/validation.md](docs/validation.md) | Live end-to-end validation evidence, including fresh-run and query-parse gates |
 | [docs/orm-deployment.md](docs/orm-deployment.md) | One-click Oracle Resource Manager deployment (full lab + LA + dashboard) |
 | [docs/discovery.md](docs/discovery.md) | **Use it on your existing ZPR setup** — discover, then stand up continuous collection |
 | [docs/deployment-modes.md](docs/deployment-modes.md) | Run autonomously in OCI — controller VM vs OCI Function vs Management Agent |
@@ -84,8 +84,10 @@ Full design (component diagram, collector internals, detection model, IAM):
 
 ## What the dashboard shows
 
-The Management Dashboard ships as **30 widgets across 6 tabs**, each answering one
-class of question. Screenshots below are from a live demo tenancy (OCIDs and IPs masked).
+The Management Dashboard ships as **40 widgets across 7 focused dashboards**:
+executive posture, policy inventory, protected-resource coverage, flow review,
+drift governance, detections, and collection health. Screenshots below are from
+a live demo tenancy with identifiers and IPs masked.
 
 **Allow / block traffic — real flows correlated against policy intent**
 

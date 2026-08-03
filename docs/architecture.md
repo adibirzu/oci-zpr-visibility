@@ -139,17 +139,19 @@ Record types (discriminator `record_type`): `zpr_policy_statement`,
 | `seed` | Create the `app` security attribute + a ZPR policy |
 | `trigger` | Synthesize flows covering every classification |
 | `provision-la` | Create LA fields/parser/source/log group; `--upload` ingests |
-| `validate-dashboards` | Execute all dashboard queries (HIT/MISS/ERROR) |
-| `deploy-dashboard` | Build + import the Management Dashboard (`--dry-run`) |
+| `validate-dashboards` | Parse and execute all queries; optionally require an exact fresh run ID |
+| `deploy-dashboard` | Build + import the focused Management Dashboard suite (`--dry-run`) |
 | `refresh` | Scheduled unit: collect → drift → upload → publish metrics |
 | `demo` | Local sample run |
 
 ## 7. Detection / dashboard model
 
-Dashboard `OCI ZPR Visibility` — 6 tabs / 29 widgets (KPI tiles, severity
-sunburst, ACCEPT/REJECT bar, src→dst flow tables, policy/resource/drift tables,
-and a **Detections** tab). `deploy_dashboard.build_management_dashboard` maps each
-widget to a saved search modelled on a working OCI LA export:
+Dashboard suite `OCI ZPR Visibility` — 7 focused dashboards / 40 widgets (KPI
+tiles, severity sunburst, flow trends and Link analysis, policy/resource/drift
+tables, detections, explicit resource coverage, and collection health).
+`deploy_dashboard.build_management_dashboards` maps each logical view to an OCI
+Management Dashboard and each widget to a saved search modelled on a working OCI
+LA export:
 - viz type matched to query shape; **real per-viz `visualizationOptions`**
   (empty `{}` crashes the JET renderer);
 - `scopeFilters` is an object (LogGroup/Entity/LogSet), not a list;
@@ -170,9 +172,11 @@ matching records with a `Detection` label via LQL `eval` (see
 | Unprotected-by-policy resource | `zpr_finding` | tagged resource no policy targets |
 | Unknown attribute reference | `zpr_finding` | policy references unknown namespace/key |
 | Rejected protected destination | `zpr_enriched_flow` | REJECT to a ZPR destination |
-| Unexpected accepted flow | `zpr_enriched_flow` | ACCEPT with no matching policy |
-| Suspected misconfiguration | `zpr_enriched_flow` | REJECT where policy expected ALLOW |
-| Policy drift | `zpr_policy_drift` | `statement_hash` changed across runs |
+| Accepted flow review | `zpr_enriched_flow` | flow-log ACCEPT with no complete modeled policy match |
+| Rejected expected-allow review | `zpr_enriched_flow` | flow-log REJECT where modeled policy expected ALLOW |
+| Policy drift | `zpr_policy_drift` | statement added, removed, or modified |
+| Collection gap | `zpr_collection_gap` | sanitized OCI read operation failed |
+| Resource coverage gap | `zpr_coverage` | supported ZPR type is not yet collected |
 
 ## 8. Continuous operation & alerting
 

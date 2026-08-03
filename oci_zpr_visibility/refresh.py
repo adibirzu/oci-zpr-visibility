@@ -6,7 +6,7 @@ run's policy records to Object Storage so the next run can detect statement_hash
 drift, then ingests inventory + findings + drift into the LA custom source.
 
 Usage:
-  oci-zpr-visibility refresh --profile cap --region eu-frankfurt-1 \
+  oci-zpr-visibility refresh --profile <PROFILE> --region <REGION> \
       --state-bucket zpr-visibility-state
 """
 from __future__ import annotations
@@ -23,14 +23,15 @@ from .jsonutil import write_jsonl
 from .logutil import emit
 from .oci_clients import build_session
 from .state import compute_drift, load_previous_records, save_records
+from .schema import new_run_id, normalize_records, run_record
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="oci-zpr-visibility refresh")
     p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
     p.add_argument("--config-file", default=None)
-    p.add_argument("--profile", default="cap")
-    p.add_argument("--region", default="eu-frankfurt-1")
+    p.add_argument("--profile", default="DEFAULT")
+    p.add_argument("--region", default=None)
     p.add_argument("--state-bucket", required=True, help="Object Storage bucket holding previous-run state")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--skip-resources", action="store_true")
@@ -43,9 +44,11 @@ def main(argv=None) -> int:
     p.add_argument("--flow-lookback-minutes", type=int, default=60,
                    help="How far back to pull flow logs each run (default 60).")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--quiet", action="store_true", help="suppress target identifiers from command output")
     args = p.parse_args(argv)
 
     session = build_session(args.auth, args.config_file, args.profile, args.region)
+    run_id = new_run_id()
     collector = ZprCollector(session)
     snapshot = collector.collect(include_resources=not args.skip_resources)
     records = collector.records_for_snapshot(snapshot)
@@ -56,6 +59,7 @@ def main(argv=None) -> int:
     # zpr_enriched_flow records so the dashboard's traffic KPIs populate. A flow
     # failure must not break inventory/findings ingestion.
     flows: list[dict] = []
+    flow_collection_status = "NOT_CONFIGURED"
     if args.flow_log_group_id and args.flow_log_id:
         try:
             from datetime import datetime, timedelta, timezone
@@ -71,14 +75,35 @@ def main(argv=None) -> int:
                 start.strftime(fmt), end.strftime(fmt),
             )
             flows = correlate_flow_records(raw_flows, snapshot, policy_records)
+            flow_collection_status = "SUCCEEDED"
         except Exception as exc:  # noqa: BLE001 - traffic KPIs are best-effort
-            print(f"WARN: flow correlation failed: {getattr(exc, 'message', exc)}", file=sys.stderr)
+            flow_collection_status = "FAILED"
+            if not args.quiet:
+                print(f"WARN: flow correlation failed: {exc.__class__.__name__}", file=sys.stderr)
 
     previous = load_previous_records(session, args.state_bucket)
     drift = compute_drift(previous, records)
-    save_records(session, args.state_bucket, records)
 
-    all_records = [*records, *findings, *drift, *flows]
+    snapshot_time = str(snapshot.get("snapshot_time") or "")
+    all_records = normalize_records(
+        [*records, *findings, *drift, *flows],
+        run_id=run_id,
+        inventory_snapshot_time=snapshot_time,
+    )
+    collection_error_count = len(snapshot.get("collection_errors", []))
+    all_records.append(
+        run_record(
+            run_id=run_id,
+            event_time=snapshot_time,
+            collection_status="SUCCEEDED_WITH_GAPS" if collection_error_count else "SUCCEEDED",
+            flow_collection_status=flow_collection_status,
+            record_count=len(records),
+            finding_count=len(findings),
+            drift_count=len(drift),
+            flow_count=len(flows),
+            collection_error_count=collection_error_count,
+        )
+    )
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
         write_jsonl(Path(fh.name), all_records)
         records_path = fh.name
@@ -87,17 +112,29 @@ def main(argv=None) -> int:
                  "--log-group-name", args.log_group_name, "--upload", records_path]
     if args.config_file:
         prov_argv += ["--config-file", args.config_file]
-    rc = provision_la.main(prov_argv)
+    if args.quiet:
+        prov_argv += ["--quiet"]
+    try:
+        rc = provision_la.main(prov_argv)
+    finally:
+        # Records can contain tenant inventory and flow details. The upload
+        # staging file is intentionally short-lived and must not remain on disk.
+        Path(records_path).unlink(missing_ok=True)
+    if rc == 0:
+        # Advance drift state only after the current evidence was accepted for
+        # upload. A failed upload must not erase the next run's comparison base.
+        save_records(session, args.state_bucket, records)
 
     published = 0
     try:
         from .metrics import publish_metrics
         published = publish_metrics(session, all_records)
     except Exception as exc:  # noqa: BLE001 - metrics are best-effort
-        print(f"WARN: metric publish failed: {getattr(exc, 'message', exc)}", file=sys.stderr)
+        if not args.quiet:
+            print(f"WARN: metric publish failed: {exc.__class__.__name__}", file=sys.stderr)
 
     emit(
-        {"records": len(records), "findings": len(findings), "drift": len(drift),
+        {"run_id": run_id, "records": len(records), "findings": len(findings), "drift": len(drift),
          "flows": len(flows), "uploaded": len(all_records), "metrics_published": published,
          "provision_rc": rc},
         f"refresh: {len(records)} records, {len(findings)} findings, {len(drift)} drift, "

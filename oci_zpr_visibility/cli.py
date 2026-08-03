@@ -17,6 +17,7 @@ from .logging_ingestion import emit_records
 from .logutil import emit
 from .oci_clients import build_session
 from .policy_parser import policy_statement_records
+from .schema import new_run_id, normalize_records, run_record
 
 
 def _session(args: argparse.Namespace) -> Any:
@@ -36,14 +37,31 @@ def cmd_collect(args: argparse.Namespace) -> int:
     snapshot = collector.collect(include_resources=not args.skip_resources, resource_query=args.resource_query)
     records = collector.records_for_snapshot(snapshot)
     findings = generate_findings(snapshot, [r for r in records if r.get("record_type") == "zpr_policy_statement"])
-    all_records = [*records, *findings]
+    run_id = new_run_id()
+    snapshot_time = str(snapshot.get("snapshot_time") or "")
+    all_records = normalize_records(
+        [*records, *findings], run_id=run_id, inventory_snapshot_time=snapshot_time
+    )
+    all_records.append(
+        run_record(
+            run_id=run_id,
+            event_time=snapshot_time,
+            collection_status="SUCCEEDED_WITH_GAPS" if snapshot.get("collection_errors") else "SUCCEEDED",
+            flow_collection_status="NOT_REQUESTED",
+            record_count=len(records),
+            finding_count=len(findings),
+            drift_count=0,
+            flow_count=0,
+            collection_error_count=len(snapshot.get("collection_errors", [])),
+        )
+    )
 
     write_json(args.snapshot, snapshot)
     write_jsonl(args.records, all_records)
     emitted = None
     if args.emit_log_id:
         emitted = emit_records(_session(args), args.emit_log_id, all_records, args.batch_size)
-    payload = {"snapshot": args.snapshot, "records": args.records,
+    payload = {"snapshot": args.snapshot, "records": args.records, "run_id": run_id,
                "record_count": len(all_records), "emitted": emitted}
     human = "\n".join(filter(None, [
         f"Emitted {emitted} records to OCI Logging log {args.emit_log_id}" if emitted is not None else None,
@@ -59,7 +77,11 @@ def cmd_findings(args: argparse.Namespace) -> int:
     policy_records: list[dict[str, Any]] = []
     for policy in snapshot.get("zpr_policies", []):
         policy_records.extend(policy_statement_records(policy, snapshot.get("snapshot_time", "")))
-    findings = generate_findings(snapshot, policy_records)
+    findings = normalize_records(
+        generate_findings(snapshot, policy_records),
+        run_id=new_run_id(),
+        inventory_snapshot_time=str(snapshot.get("snapshot_time") or ""),
+    )
     write_jsonl(args.output, findings)
     emit({"output": args.output, "finding_count": len(findings)},
          f"Wrote {len(findings)} findings to {args.output}", args.json)
@@ -89,7 +111,11 @@ def cmd_correlate(args: argparse.Namespace) -> int:
     else:
         print("provide --flows <jsonl> or --flow-log-group-id <ocid>", file=sys.stderr)
         return 2
-    enriched = correlate_flow_records(flows, snapshot, policy_records)
+    enriched = normalize_records(
+        correlate_flow_records(flows, snapshot, policy_records),
+        run_id=new_run_id(),
+        inventory_snapshot_time=str(snapshot.get("snapshot_time") or ""),
+    )
     write_jsonl(args.output, enriched)
     emit({"output": args.output, "enriched_count": len(enriched), "flow_count": len(flows)},
          f"Wrote {len(enriched)} enriched flow records to {args.output}", args.json)
@@ -111,8 +137,18 @@ def cmd_demo(args: argparse.Namespace) -> int:
     policy_records: list[dict[str, Any]] = []
     for policy in snapshot.get("zpr_policies", []):
         policy_records.extend(policy_statement_records(policy, snapshot.get("snapshot_time", "")))
-    findings = generate_findings(snapshot, policy_records)
-    enriched = correlate_flow_records(flows, snapshot, policy_records)
+    run_id = new_run_id()
+    snapshot_time = str(snapshot.get("snapshot_time") or "")
+    findings = normalize_records(
+        generate_findings(snapshot, policy_records),
+        run_id=run_id,
+        inventory_snapshot_time=snapshot_time,
+    )
+    enriched = normalize_records(
+        correlate_flow_records(flows, snapshot, policy_records),
+        run_id=run_id,
+        inventory_snapshot_time=snapshot_time,
+    )
     write_json(root / "snapshot.json", snapshot)
     write_jsonl(root / "records.jsonl", [*policy_records, *findings])
     write_jsonl(root / "enriched_flows.jsonl", enriched)

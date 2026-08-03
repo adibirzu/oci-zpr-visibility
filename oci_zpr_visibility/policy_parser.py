@@ -36,6 +36,12 @@ class ParsedStatement:
     target_type: str
     cidrs: tuple[str, ...]
     ips: tuple[str, ...]
+    source_cidrs: tuple[str, ...]
+    destination_cidrs: tuple[str, ...]
+    source_ips: tuple[str, ...]
+    destination_ips: tuple[str, ...]
+    source_type: str
+    destination_type: str
     attribute_references: tuple[str, ...]
     parser_confidence: str
 
@@ -50,6 +56,12 @@ class ParsedStatement:
             "target_type": self.target_type,
             "cidrs": list(self.cidrs),
             "ips": list(self.ips),
+            "source_cidrs": list(self.source_cidrs),
+            "destination_cidrs": list(self.destination_cidrs),
+            "source_ips": list(self.source_ips),
+            "destination_ips": list(self.destination_ips),
+            "source_type": self.source_type,
+            "destination_type": self.destination_type,
             "attribute_references": list(self.attribute_references),
             "parser_confidence": self.parser_confidence,
         }
@@ -88,6 +100,21 @@ def _attributes(text: str) -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _endpoint_type(text: str, attributes: list[str], cidrs: tuple[str, ...], ips: tuple[str, ...]) -> str:
+    lowered = text.lower()
+    if attributes:
+        return "attribute"
+    if cidrs:
+        return "cidr"
+    if ips:
+        return "ip"
+    if "all-endpoints" in lowered or "all-endpoint" in lowered:
+        return "all_endpoints"
+    if "osn-services-ip-addresses" in lowered:
+        return "osn_services"
+    return "unknown"
+
+
 def parse_statement(statement: str) -> ParsedStatement:
     raw = " ".join(statement.strip().split())
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -100,11 +127,27 @@ def parse_statement(statement: str) -> ParsedStatement:
     destination_attribute: str | None = None
     network_scope: str | None = None
     confidence = "low"
+    source_cidrs: tuple[str, ...] = ()
+    destination_cidrs: tuple[str, ...] = ()
+    source_ips: tuple[str, ...] = ()
+    destination_ips: tuple[str, ...] = ()
+    source_type = "unknown"
+    destination_type = "unknown"
 
     if relation:
         network_scope = relation.group("scope")
-        source_refs = _attributes(relation.group("source"))
-        destination_refs = _attributes(relation.group("destination"))
+        source_text = relation.group("source")
+        destination_text = relation.group("destination")
+        source_refs = _attributes(source_text)
+        destination_refs = _attributes(destination_text)
+        source_cidrs = _valid_cidrs(source_text)
+        destination_cidrs = _valid_cidrs(destination_text)
+        source_ips = _valid_ips(source_text, source_cidrs)
+        destination_ips = _valid_ips(destination_text, destination_cidrs)
+        source_type = _endpoint_type(source_text, source_refs, source_cidrs, source_ips)
+        destination_type = _endpoint_type(
+            destination_text, destination_refs, destination_cidrs, destination_ips
+        )
         source_attribute = source_refs[0] if source_refs else None
         destination_attribute = destination_refs[0] if destination_refs else None
         if source_attribute and (destination_attribute or cidrs or ips):
@@ -112,13 +155,7 @@ def parse_statement(statement: str) -> ParsedStatement:
         else:
             confidence = "medium"
 
-    target_type = "attribute"
-    if cidrs:
-        target_type = "cidr"
-    elif ips:
-        target_type = "ip"
-    elif not destination_attribute:
-        target_type = "unknown"
+    target_type = destination_type
 
     return ParsedStatement(
         raw_statement=raw,
@@ -130,6 +167,12 @@ def parse_statement(statement: str) -> ParsedStatement:
         target_type=target_type,
         cidrs=cidrs,
         ips=ips,
+        source_cidrs=source_cidrs,
+        destination_cidrs=destination_cidrs,
+        source_ips=source_ips,
+        destination_ips=destination_ips,
+        source_type=source_type,
+        destination_type=destination_type,
         attribute_references=references,
         parser_confidence=confidence,
     )
@@ -148,15 +191,17 @@ def statements_from_policy(policy: dict[str, Any]) -> list[str]:
 
 def policy_statement_records(policy: dict[str, Any], snapshot_time: str) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for statement in statements_from_policy(policy):
+    for statement_index, statement in enumerate(statements_from_policy(policy)):
         parsed = parse_statement(statement).as_dict()
         records.append(
             {
                 "record_type": "zpr_policy_statement",
                 "snapshot_time": snapshot_time,
+                "event_time": snapshot_time,
                 "policy_id": policy.get("id"),
                 "policy_name": policy.get("name") or policy.get("display_name"),
                 "policy_lifecycle_state": policy.get("lifecycle_state") or policy.get("state"),
+                "statement_index": statement_index,
                 **parsed,
             }
         )

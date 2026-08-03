@@ -9,7 +9,7 @@ SEVERITY_WIDGETS = {
 }
 FLOW_WIDGETS = {
     "Enriched ACCEPT vs REJECT", "Flow path link (src to dst)",
-    "Unexpected accepted flows", "Rejected protected destinations",
+    "Accepted flows requiring policy review", "Rejected protected destinations",
 }
 SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 

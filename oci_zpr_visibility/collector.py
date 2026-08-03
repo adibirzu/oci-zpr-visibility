@@ -10,6 +10,20 @@ from .policy_parser import policy_statement_records
 from .security_attributes import flatten_security_attributes, render_attributes
 
 
+# Current OCI ZPR-supported resource families. Collectors are implemented first
+# for VCN and Compute instance; remaining rows are emitted as explicit coverage
+# gaps so a zero-resource KPI never implies full-tenancy coverage.
+ZPR_SUPPORTED_RESOURCE_TYPES = (
+    "bastion", "instance", "instance_configuration", "autonomous_database",
+    "cloud_autonomous_vm_cluster", "cloud_vm_cluster", "database", "db_system",
+    "exadb_vm_cluster", "private_endpoint", "mount_target", "functions_application",
+    "goldengate_deployment", "goldengate_connection", "load_balancer",
+    "mysql_db_system", "mysql_replica", "vcn", "vnic", "network_firewall",
+    "network_load_balancer", "cache_cluster", "opensearch_cluster", "desktop_pool",
+    "stream_pool",
+)
+
+
 def _list_all(oci: Any, func: Any, *args: Any, **kwargs: Any) -> list[Any]:
     return list(oci.pagination.list_call_get_all_results(func, *args, **kwargs).data)
 
@@ -52,6 +66,9 @@ class ZprCollector:
     def __init__(self, session: OciSession) -> None:
         self.session = session
         self.oci = session.oci
+        self.collection_errors: list[dict[str, Any]] = []
+        self.coverage_counts: dict[str, dict[str, int]] = {}
+        self.coverage_failures: set[str] = set()
 
     def enable_zpr(self, dry_run: bool = False) -> dict[str, Any]:
         zpr = client(self.session, "zpr.ZprClient")
@@ -61,6 +78,9 @@ class ZprCollector:
         return to_plain(response.data)
 
     def collect(self, include_resources: bool = True, resource_query: str | None = None) -> dict[str, Any]:
+        self.collection_errors = []
+        self.coverage_counts = {}
+        self.coverage_failures = set()
         snapshot_time = utc_now_iso()
         snapshot: dict[str, Any] = {
             "snapshot_time": snapshot_time,
@@ -72,6 +92,8 @@ class ZprCollector:
             "security_attributes": [],
             "resources": [],
             "ip_resource_map": [],
+            "collection_errors": [],
+            "resource_coverage": [],
         }
         namespaces, attributes = self._collect_security_attributes()
         snapshot["security_attribute_namespaces"] = namespaces
@@ -81,6 +103,9 @@ class ZprCollector:
             resources = self._collect_resources(resource_query)
             snapshot["resources"] = resources
             snapshot["ip_resource_map"] = self._build_ip_map(resources)
+
+        snapshot["collection_errors"] = list(self.collection_errors)
+        snapshot["resource_coverage"] = self._coverage_records(snapshot_time, include_resources)
 
         return snapshot
 
@@ -108,6 +133,48 @@ class ZprCollector:
                     "vnic_id": resource.get("vnic_id"),
                     "private_ip": resource.get("private_ip"),
                     "security_attributes": ",".join(render_attributes(attrs)),
+                }
+            )
+        records.extend(snapshot.get("resource_coverage", []))
+        records.extend(snapshot.get("collection_errors", []))
+        return records
+
+    def _collection_error(self, *, service: str, operation: str, resource_type: str | None, exc: Exception) -> None:
+        now = utc_now_iso()
+        if resource_type:
+            self.coverage_failures.add(resource_type)
+        self.collection_errors.append(
+            {
+                "record_type": "zpr_collection_gap",
+                "snapshot_time": now,
+                "event_time": now,
+                "severity": "HIGH",
+                "collection_service": service,
+                "collection_operation": operation,
+                "resource_type": resource_type,
+                "error_category": exc.__class__.__name__,
+                "recommendation": "Verify least-privilege read access and rerun collection.",
+            }
+        )
+
+    def _coverage_records(self, snapshot_time: str, include_resources: bool) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for resource_type in ZPR_SUPPORTED_RESOURCE_TYPES:
+            counts = self.coverage_counts.get(resource_type, {})
+            implemented = resource_type in {"vcn", "instance"}
+            if include_resources and implemented and resource_type in self.coverage_failures:
+                status = "PARTIAL"
+            else:
+                status = "COLLECTED" if include_resources and implemented else "NOT_COLLECTED"
+            records.append(
+                {
+                    "record_type": "zpr_coverage",
+                    "snapshot_time": snapshot_time,
+                    "event_time": snapshot_time,
+                    "resource_type": resource_type,
+                    "coverage_status": status,
+                    "eligible_count": counts.get("eligible") if status in {"COLLECTED", "PARTIAL"} else None,
+                    "protected_count": counts.get("protected") if status in {"COLLECTED", "PARTIAL"} else None,
                 }
             )
         return records
@@ -165,8 +232,10 @@ class ZprCollector:
                     compartment_id_in_subtree=True, access_level="ANY", lifecycle_state="ACTIVE",
                 )
             ]
-        except Exception:
-            pass
+        except Exception as exc:
+            self._collection_error(
+                service="Identity", operation="list_compartments", resource_type=None, exc=exc
+            )
         return ids
 
     def _collect_resources(self, query: str | None) -> list[dict[str, Any]]:
@@ -182,7 +251,10 @@ class ZprCollector:
         resources: list[dict[str, Any]] = []
         for cid in self._compartment_ids():
             try:
-                for vcn in _list_all(self.oci, net.list_vcns, cid):
+                vcns = _list_all(self.oci, net.list_vcns, cid)
+                counts = self.coverage_counts.setdefault("vcn", {"eligible": 0, "protected": 0})
+                counts["eligible"] += len(vcns)
+                for vcn in vcns:
                     rec = protected_resource_record(
                         getattr(vcn, "security_attributes", None),
                         resource_id=vcn.id, resource_name=vcn.display_name, resource_type="Vcn",
@@ -190,10 +262,16 @@ class ZprCollector:
                     )
                     if rec:
                         resources.append(rec)
-            except Exception:
-                pass
+                        counts["protected"] += 1
+            except Exception as exc:
+                self._collection_error(
+                    service="Networking", operation="list_vcns", resource_type="vcn", exc=exc
+                )
             try:
-                for inst in _list_all(self.oci, compute.list_instances, cid):
+                instances = _list_all(self.oci, compute.list_instances, cid)
+                counts = self.coverage_counts.setdefault("instance", {"eligible": 0, "protected": 0})
+                counts["eligible"] += len(instances)
+                for inst in instances:
                     rec = protected_resource_record(
                         getattr(inst, "security_attributes", None),
                         resource_id=inst.id, resource_name=inst.display_name, resource_type="instance",
@@ -201,8 +279,11 @@ class ZprCollector:
                     )
                     if rec:
                         resources.append(rec)
-            except Exception:
-                pass
+                        counts["protected"] += 1
+            except Exception as exc:
+                self._collection_error(
+                    service="Compute", operation="list_instances", resource_type="instance", exc=exc
+                )
         return self._enrich_compute_vnics(resources)
 
     def _enrich_compute_vnics(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -238,7 +319,10 @@ class ZprCollector:
                                 "private_ip": getattr(private_ip, "ip_address", None) if private_ip else getattr(vnic, "private_ip", None),
                             }
                         )
-            except Exception:
+            except Exception as exc:
+                self._collection_error(
+                    service="Compute", operation="enrich_vnics", resource_type="instance", exc=exc
+                )
                 enriched.append(resource)
         return enriched
 

@@ -19,7 +19,7 @@ class RefreshFlowLogTests(unittest.TestCase):
             mock.patch("oci_zpr_visibility.refresh.load_previous_records", return_value=[]),
             mock.patch("oci_zpr_visibility.refresh.compute_drift", return_value=[]),
             mock.patch("oci_zpr_visibility.refresh.save_records"),
-            mock.patch("oci_zpr_visibility.refresh.write_jsonl"),
+            mock.patch("oci_zpr_visibility.refresh.write_jsonl") as write_jsonl,
             mock.patch("oci_zpr_visibility.refresh.provision_la.main", return_value=0),
             mock.patch("oci_zpr_visibility.metrics.publish_metrics", return_value=0),
             mock.patch("oci_zpr_visibility.flow_logs.fetch_flow_logs", return_value=[]) as fetch_flow_logs,
@@ -33,6 +33,7 @@ class RefreshFlowLogTests(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(fetch_flow_logs.call_args.args[1], "flow-compartment")
+        self.assertFalse(write_jsonl.call_args.args[0].exists())
 
 
 if __name__ == "__main__":

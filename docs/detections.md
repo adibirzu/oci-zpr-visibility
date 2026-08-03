@@ -20,11 +20,11 @@ console, then add a source label condition mapping the same field/value.
 
 | Detection label | Record / condition | Severity | Meaning | Action |
 |-----------------|--------------------|----------|---------|--------|
-| `ZPR-Over-Permissive` | `zpr_enriched_flow` `classification = unexpected_accepted` | HIGH | A connection was **allowed** but matches no intended ZPR relationship — an over-permissive path. | Add an explicit ZPR relationship that captures the legitimate need, or remove the path. |
-| `ZPR-Suspected-Misconfig` | `zpr_enriched_flow` `classification = suspected_misconfiguration` | HIGH | A connection to a **protected destination** was **rejected** where policy appears to intend allow. | Reconcile the policy statement with the intended relationship; check attribute tagging. |
-| `ZPR-Blocked-Protected` | `zpr_enriched_flow` `action = REJECT and zpr_destination = true` | MEDIUM | Traffic blocked at a ZPR-protected destination (expected zero-trust behaviour; watch for spikes). | Confirm the blocks are intended; investigate sources generating them. |
+| `ZPR-Accepted-Review` | `zpr_enriched_flow` `review_classification = accepted_requires_policy_review` | HIGH | VCN Flow Logs observed ACCEPT to a protected destination without a complete modeled relationship. This is not a provider ZPR verdict. | Review policy, attributes, scope, and other network controls before changing enforcement. |
+| `ZPR-Rejected-Expected-Allow` | `zpr_enriched_flow` `review_classification = rejected_policy_expected_allow` | HIGH | VCN Flow Logs observed REJECT where the modeled relationship appears to allow. This is not proof that ZPR rejected it. | Check ZPR intent together with routes, NSGs, and security lists. |
+| `ZPR-Blocked-Protected` | `zpr_enriched_flow` `action = REJECT and zpr_destination = true` | MEDIUM | Traffic was rejected on a path to a ZPR-protected destination. | Confirm the rejection is intended and identify the responsible control layer. |
 | `ZPR-Broad-CIDR` | `zpr_finding` `finding_type = broad_cidr_exception` | HIGH | A policy grants a **broad CIDR** (e.g. `10.0.0.0/8`) instead of attribute-scoped access, weakening zero trust. | Replace the CIDR grant with attribute-to-attribute relationships. |
-| `ZPR-Policy-Drift` | `zpr_policy_drift` (statement hash changed) | MEDIUM | A policy statement changed across runs. | Confirm the change was intended and reviewed. |
+| `ZPR-Policy-Drift` | `zpr_policy_drift` (`ADDED`, `REMOVED`, or `MODIFIED`) | MEDIUM | A policy statement changed across successfully uploaded runs. | Confirm the change was intended and reviewed. |
 
 ## Promoting a detection to an OCI LA alert
 
@@ -33,8 +33,8 @@ Log Analytics with the rule's query, for example:
 
 ```
 'Log Source' = 'OCI ZPR Visibility JSON'
-| where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted'
-| eval Detection = 'ZPR-Over-Permissive'
+| where record_type = 'zpr_enriched_flow' and review_classification = 'accepted_requires_policy_review'
+| eval Detection = 'ZPR-Accepted-Review'
 | stats count as hits by Detection, source_resource_name, destination_resource_name
 ```
 

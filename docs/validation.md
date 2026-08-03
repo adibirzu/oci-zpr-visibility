@@ -1,35 +1,37 @@
 # OCI ZPR Visibility — End-to-End Validation Report
 
-Environment: **cap** tenancy (`pbncapgemini`, eu-frankfurt-1) staging.
-Last run: 2026-06-04. All values shown as placeholders; real OCIDs/namespace
-live only in the gitignored `terraform/terraform.tfvars` and the tenancy.
+Environment: verified OCI target; tenant, profile, region, namespace, resource
+names, addresses, and identifiers are intentionally omitted.
+Last run: 2026-08-03. No live identifiers are stored in this repository.
 
-## Summary — fully green
+## Summary — current live acceptance
 
 | Stage | Method | Result |
 |-------|--------|--------|
-| Unit suite | `pytest` on isolated `.venv` (oci 2.177.0) | ✅ 6/6 |
+| Unit suite | `pytest` | ✅ 97/97; core coverage 86% |
 | Local pipeline | `demo`, `findings`, `correlate` CLI | ✅ |
 | ZPR onboarding | `enable-zpr` (live) | ✅ ACTIVE / ENABLED |
-| ZPR rule (real) | `scripts/seed_cap.py` → `create_zpr_policy` | ✅ `zpr-visibility-demo` ACTIVE |
+| ZPR rule (real) | `scripts/seed_demo.py` → `create_zpr_policy` | ✅ ACTIVE |
 | Security attributes | `create_security_attribute` (oracle-zpr `app`) | ✅ |
-| Real inventory data | `collect --profile cap` | ✅ 2 statements + 6 findings |
+| Real inventory and coverage data | current-run collector | ✅ fresh evidence uploaded |
 | Rule triggering | `scripts/trigger_rules.py` | ✅ all 5 flow classifications |
-| Log collection | `emit` → OCI Logging → `logging-search` | ✅ all records, 4 record_types |
-| LA fields + parser + source + log group | `scripts/provision_la.py` | ✅ 40 fields, JSON parser, source, log group |
-| LA ingestion | `provision_la.py --upload` (Upload API) | ✅ status 200 |
-| **Dashboards (execute)** | `scripts/validate_dashboards.py` | ✅ **21/21 widgets HIT, 0 MISS, 0 ERROR** |
+| LA fields + parser + source + log group | `provision-la --quiet` | ✅ 84 fields and updated source/parser |
+| Current-run ingestion | `refresh --quiet` | ✅ 633/633 records indexed in the dashboard window |
+| Dashboard query parse + execute | `validate-dashboards` | ✅ 40/40 queries, 0 errors; 38 data + 2 valid zero states |
+| Management Dashboard import | `deploy-dashboard --quiet` | ✅ 7 dashboards, 40 tiles, 40 saved searches |
 
-## End-to-end path (all live in cap)
+## End-to-end path (live in the approved target)
 
-1. `seed_cap.py` creates the `app` security attribute + the `zpr-visibility-demo`
-   ZPR policy (web→db relationship + broad-CIDR exception `10.0.0.0/8`).
-2. `collect` reads the live policy → real `zpr_policy_statement` + `zpr_finding`
-   records (incl. HIGH `broad_cidr_exception`).
-3. `trigger_rules.py` produces flows covering every classification.
-4. `provision_la.py` creates the LA custom fields, JSON parser, source
-   (`OCI ZPR Visibility JSON`), and log group, then `--upload` ingests the records.
-5. `validate_dashboards.py` executes all 21 dashboard queries → **21/21 HIT**.
+1. A read-only preflight resolves and context-binds the exact target without
+   printing its identifier.
+2. `refresh` collects inventory, coverage and sanitized gap records; correlates
+   a uniquely selected project flow log; computes drift; uploads the evidence;
+   advances state only after upload; and deletes the temporary staging file.
+3. Every record is bound to an opaque current run ID and a common event time.
+4. `validate-dashboards` parses and executes all 40 queries and requires the
+   exact expected current-run record count inside the dashboard time window.
+5. `deploy-dashboard` imports seven focused dashboards only after that gate.
+6. A post-import API read verifies 7 dashboards, 40 tiles, and 40 saved searches.
 
 ## OCI Log Analytics — solved recipe (was the blocker)
 
@@ -45,15 +47,14 @@ A custom JSON parser create returns HTTP 500 unless configured exactly:
   display name before upsert (OCI sets source iname = display name).
 
 This recipe was cross-pollinated from the `oci-log-analytics-detections`
-project's proven `setup_log_sources.py` and verified live in cap.
+project's proven `setup_log_sources.py` and verified in the approved live target.
 
-## Live resources in cap
+## Live resources
 
-- ZPR configuration (ENABLED, `prevent_destroy`) + ZPR policy `zpr-visibility-demo`.
-- Security attribute `app` in `oracle-zpr`.
-- OCI Logging log group `zpr-visibility` + custom log `zpr-inventory` (terraform).
-- LA: 40 custom fields, parser `oci_zpr_visibility_json_parser`, source
-  `OCI ZPR Visibility JSON`, log group `zpr-visibility-la`.
+- ZPR was already enabled; no enforcement policy or security attribute was changed.
+- One project-scoped flow log and one project state bucket were selected uniquely.
+- LA contains the tenant-neutral project source/parser, 84 mapped fields, and
+  the seven-dashboard suite.
 
 ## Reproduce (full e2e)
 
@@ -61,14 +62,14 @@ project's proven `setup_log_sources.py` and verified live in cap.
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/python -m pytest tests/ -q
 terraform -chdir=terraform apply                          # logging layer
-.venv/bin/python scripts/seed_cap.py        --profile cap --region eu-frankfurt-1
-.venv/bin/oci-zpr-visibility collect        --profile cap --region eu-frankfurt-1 --skip-resources \
-    --snapshot out/cap/zpr_snapshot.json --records out/cap/zpr_records.jsonl
-.venv/bin/python scripts/trigger_rules.py   --out out/cap/trigger_records.jsonl
-cat out/cap/zpr_records.jsonl out/cap/trigger_records.jsonl > out/cap/all_records.jsonl
-.venv/bin/python scripts/provision_la.py    --profile cap --region eu-frankfurt-1 --upload out/cap/all_records.jsonl
-.venv/bin/oci-zpr-visibility validate-dashboards --profile cap --region eu-frankfurt-1   # expect 21/21 HIT
-.venv/bin/oci-zpr-visibility deploy-dashboard    --profile cap --region eu-frankfurt-1   # import to OCI LA
+.venv/bin/oci-zpr-visibility provision-la --profile <PROFILE> --region <REGION> --quiet
+.venv/bin/oci-zpr-visibility refresh --profile <PROFILE> --region <REGION> \
+  --state-bucket <STATE_BUCKET> --flow-log-compartment-id <COMPARTMENT_OCID> \
+  --flow-log-group-id <FLOW_LOG_GROUP_OCID> --flow-log-id <FLOW_LOG_OCID> \
+  --flow-lookback-minutes 45 --json --quiet
+.venv/bin/oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION> \
+  --expected-run-id <OPAQUE_RUN_ID> --expected-record-count <UPLOADED_COUNT> --quiet
+.venv/bin/oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --quiet
 ```
 
 ## Continuous production path (scheduled Upload API)

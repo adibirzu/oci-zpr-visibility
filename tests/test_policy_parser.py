@@ -21,6 +21,16 @@ class PolicyParserTests(unittest.TestCase):
         self.assertIsNone(parsed.destination_attribute)
         self.assertEqual(parsed.target_type, "cidr")
         self.assertEqual(parsed.cidrs, ("0.0.0.0/0",))
+        self.assertEqual(parsed.destination_cidrs, ("0.0.0.0/0",))
+        self.assertEqual(parsed.source_type, "attribute")
+        self.assertEqual(parsed.destination_type, "cidr")
+
+    def test_parse_cidr_source_separately_from_attribute_destination(self):
+        parsed = parse_statement("in network:prod VCN allow 10.0.0.0/24 to connect to app:db endpoints")
+        self.assertEqual(parsed.source_type, "cidr")
+        self.assertEqual(parsed.source_cidrs, ("10.0.0.0/24",))
+        self.assertEqual(parsed.destination_type, "attribute")
+        self.assertEqual(parsed.destination_attribute, "app:db")
 
 
 if __name__ == "__main__":

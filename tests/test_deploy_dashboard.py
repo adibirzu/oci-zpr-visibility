@@ -64,6 +64,13 @@ class BuildManagementDashboardTests(unittest.TestCase):
         for s in self.built["savedSearches"]:
             self.assertEqual(s["compartmentId"], FAKE_CMPT)
 
+    def test_suite_builds_one_dashboard_per_logical_view(self):
+        suite = deploy_dashboard.build_management_dashboards(self.dash, FAKE_CMPT)
+        self.assertEqual(len(suite), len(self.dash["tabs"]))
+        self.assertEqual(sum(len(item["tiles"]) for item in suite), len(dashboard.iter_widgets(self.dash)))
+        self.assertEqual(suite[0]["displayName"], "OCI ZPR Visibility")
+        self.assertEqual(len({item["dashboardId"] for item in suite}), len(suite))
+
 
 if __name__ == "__main__":
     unittest.main()

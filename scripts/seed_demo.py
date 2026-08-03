@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Thin shim — implementation lives in oci_zpr_visibility.seed.
-
-Kept so existing docs/commands (scripts/seed_cap.py ...) keep working; prefer
-`oci-zpr-visibility seed` going forward.
-"""
+"""Thin shim for the tenant-neutral ZPR demonstration seed command."""
 import sys
 from pathlib import Path
 

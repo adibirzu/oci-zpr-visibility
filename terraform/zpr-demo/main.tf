@@ -21,7 +21,7 @@ variable "region" {
 }
 variable "profile" {
   type    = string
-  default = "cap"
+  default = "DEFAULT"
 }
 variable "compartment_ocid" {
   type = string

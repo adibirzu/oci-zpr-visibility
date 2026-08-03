@@ -72,6 +72,35 @@ class DashboardSchemaTests(unittest.TestCase):
                     f"{w['name']} has a field-to-field filter after stats",
                 )
 
+    def test_dashboard_exposes_trust_and_collection_health(self):
+        by_name = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}
+        self.assertIn("Flow review trend", by_name)
+        self.assertIn("Latest visibility runs", by_name)
+        self.assertIn("Explicit resource coverage gaps", by_name)
+        self.assertIn("correlation_confidence", by_name["Accepted flows requiring policy review"]["query"])
+        self.assertIn("zpr_attribution", by_name["Rejected protected destinations"]["query"])
+        self.assertEqual(by_name["Flow path link (src to dst)"]["visualization_type"], "link")
+
+    def test_customer_queries_use_review_classification_for_inferred_flows(self):
+        for name in (
+            "KPI: Accepted for policy review",
+            "Accepted flows requiring policy review",
+            "DET: Accepted policy review",
+            "DET: Rejected expected allow",
+        ):
+            self.assertIn("review_classification", {
+                w["name"]: w for w in dashboard.iter_widgets(self.dash)
+            }[name]["query"])
+
+    def test_zero_result_states_are_explicit_not_implicit(self):
+        allowed = {
+            w["name"] for w in dashboard.iter_widgets(self.dash) if w.get("allow_zero")
+        }
+        self.assertEqual(
+            allowed,
+            {"Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)", "Collection gaps"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

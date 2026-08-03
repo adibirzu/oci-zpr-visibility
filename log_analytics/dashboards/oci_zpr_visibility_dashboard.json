@@ -56,8 +56,8 @@
           "visualization_options": {}
         },
         {
-          "name": "KPI: Unexpected accepted",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as unexpected",
+          "name": "KPI: Accepted for policy review",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'accepted_requires_policy_review' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as accepted_for_review",
           "visualization_type": "tile",
           "layout": {
             "width": 3,
@@ -194,6 +194,26 @@
             "height": 5
           },
           "visualization_options": {}
+        },
+        {
+          "name": "Collector coverage by resource type",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_coverage' | stats count as resource_types by coverage_status",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Explicit resource coverage gaps",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_coverage' and coverage_status != 'COLLECTED' | fields resource_type, coverage_status, inventory_snapshot_time, run_id",
+          "visualization_type": "table",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {}
         }
       ]
     },
@@ -202,7 +222,7 @@
       "widgets": [
         {
           "name": "Enriched ACCEPT vs REJECT",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as flows by action, classification",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as flows by action, review_classification",
           "visualization_type": "bar",
           "layout": {
             "width": 6,
@@ -222,8 +242,28 @@
           ]
         },
         {
+          "name": "Flow review trend",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | timestats span = 15min count by review_classification",
+          "visualization_type": "line",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Flow capture quality",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats count as flows by capture_status",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
           "name": "Rejected protected destinations",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | fields source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | fields event_time, review_classification, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, source_port, destination_port, protocol, flow_id, bytes_out, packets, capture_status",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -243,8 +283,8 @@
           ]
         },
         {
-          "name": "Unexpected accepted flows",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | fields source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "name": "Accepted flows requiring policy review",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'accepted_requires_policy_review' | fields event_time, review_classification, correlation_confidence, zpr_attribution, correlation_reason, matched_policy_name, source_resource_name, source_ip, destination_resource_name, destination_ip, source_port, destination_port, protocol, flow_id, bytes_out, packets, capture_status",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -265,8 +305,8 @@
         },
         {
           "name": "Flow path link (src to dst)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | fields source_resource_name, destination_resource_name, destination_ip, classification",
-          "visualization_type": "table",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | link source_resource_name, destination_resource_name, review_classification",
+          "visualization_type": "link",
           "layout": {
             "width": 12,
             "height": 6
@@ -291,7 +331,7 @@
       "widgets": [
         {
           "name": "Policy drift candidates",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | fields policy_id, statement, old_hash, new_hash",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | fields event_time, change_type, policy_name, statement_index, old_statement, new_statement, old_hash, new_hash, run_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -325,8 +365,8 @@
       "name": "Detections",
       "widgets": [
         {
-          "name": "DET: Over-permissive flows",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as over_permissive",
+          "name": "DET: Accepted policy review",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'accepted_requires_policy_review' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as accepted_for_review",
           "visualization_type": "tile",
           "layout": {
             "width": 3,
@@ -335,8 +375,8 @@
           "visualization_options": {}
         },
         {
-          "name": "DET: Suspected misconfig",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'suspected_misconfiguration' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as suspected_misconfig",
+          "name": "DET: Rejected expected allow",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'rejected_policy_expected_allow' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as rejected_expected_allow",
           "visualization_type": "tile",
           "layout": {
             "width": 3,
@@ -365,8 +405,8 @@
           "visualization_options": {}
         },
         {
-          "name": "Detection: over-permissive flows (ZPR-Over-Permissive)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'unexpected_accepted' | eval Detection = 'ZPR-Over-Permissive' | fields Detection, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "name": "Detection: accepted policy review (ZPR-Accepted-Review)",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'accepted_requires_policy_review' | eval Detection = 'ZPR-Accepted-Review' | fields Detection, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol, flow_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -375,8 +415,9 @@
           "visualization_options": {}
         },
         {
-          "name": "Detection: suspected misconfiguration (ZPR-Suspected-Misconfig)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and classification = 'suspected_misconfiguration' | eval Detection = 'ZPR-Suspected-Misconfig' | fields Detection, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "name": "Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)",
+          "allow_zero": true,
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and review_classification = 'rejected_policy_expected_allow' | eval Detection = 'ZPR-Rejected-Expected-Allow' | fields Detection, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol, flow_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -406,11 +447,77 @@
         },
         {
           "name": "Detection: policy drift (ZPR-Policy-Drift)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | eval Detection = 'ZPR-Policy-Drift' | fields Detection, policy_id, statement, old_hash, new_hash",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | eval Detection = 'ZPR-Policy-Drift' | fields Detection, event_time, change_type, policy_name, old_statement, new_statement, old_hash, new_hash, run_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,
             "height": 4
+          },
+          "visualization_options": {}
+        }
+      ]
+    },
+    {
+      "name": "Collection health",
+      "widgets": [
+        {
+          "name": "Latest visibility runs",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_run' | fields event_time, run_id, schema_version, collection_status, flow_collection_status, record_count, finding_count, drift_count, flow_count, collection_error_count",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Collector status",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_run' | stats count as runs by collection_status",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 4
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Flow collection status",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_run' | stats count as runs by flow_collection_status",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 4
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Collection gaps",
+          "allow_zero": true,
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, collection_operation, resource_type, error_category, recommendation, run_id",
+          "visualization_type": "table",
+          "layout": {
+            "width": 12,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Resource coverage status",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_coverage' | stats count as resource_types by coverage_status",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Schema versions observed",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | stats count as records by schema_version, record_type",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
           },
           "visualization_options": {}
         }

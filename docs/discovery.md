@@ -33,7 +33,7 @@ oracle-zpr attributes: app, db, fin-network, ops, web
 Protected resources  : 3 (Vcn=1, instance=2)
 
 VCN Flow Logs found (13):
-  - zpr-visibility-endpoints-flow
+  - <FLOW_LOG_NAME>
       group: ocid1.loggroup.oc1.<region>.xxxx
       log  : ocid1.log.oc1.<region>.xxxx
   ...

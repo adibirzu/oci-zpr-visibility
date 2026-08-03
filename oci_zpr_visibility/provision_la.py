@@ -8,14 +8,14 @@ Idempotently creates:
   * a Log Analytics log group (target for ingestion / Connector Hub)
 
 Usage:
-  .venv/bin/python scripts/provision_la.py --profile cap --region eu-frankfurt-1 \
+  .venv/bin/python scripts/provision_la.py --profile <PROFILE> --region <REGION> \
       --log-group-name zpr-visibility-la
 
 With --upload <file.jsonl>, also ingests records into LA via the Upload API
 under the source (the fast path used for end-to-end validation; Connector Hub
 is the continuous production path).
 
-OCI Log Analytics modeling notes (verified live in cap):
+OCI Log Analytics modeling notes (verified in a live tenant):
   * upsert_field with no `name` CREATES and auto-generates an internal name
     (udfsNN). Passing `name` means UPDATE and fails with "Field not found".
   * Reuse an existing field (system or custom) by case-insensitive display name
@@ -43,27 +43,46 @@ SOURCE_DISPLAY_NAME = "OCI ZPR Visibility JSON"
 SOURCE_NAME = "oci_zpr_visibility_json"
 PARSER_DISPLAY_NAME = "OCI ZPR Visibility JSON Parser"
 PARSER_NAME = "oci_zpr_visibility_json_parser"
+_QUIET = False
+
+
+def _say(message: str = "") -> None:
+    if not _QUIET:
+        print(message)
 
 # JSON key -> display name (display name is what dashboard queries reference).
 # Display name is kept identical to the JSON key so queries use bare tokens.
 FIELD_TOKENS = [
+    "schema_version", "run_id", "event_time", "inventory_snapshot_time",
     "record_type", "policy_id", "policy_name", "policy_lifecycle_state",
-    "statement", "statement_hash", "action", "source_attribute",
+    "statement", "statement_hash", "statement_index", "action", "source_attribute",
     "destination_attribute", "network_scope", "target_type", "parser_confidence",
     "resource_id", "resource_name", "resource_type", "compartment_id", "region",
     "vcn_id", "subnet_id", "vnic_id", "private_ip", "security_attributes",
     "severity", "finding_type", "cidr", "recommendation", "attribute_reference",
     "classification", "source_ip", "destination_ip", "destination_port",
-    "protocol", "source_resource_id", "source_resource_name",
+    "review_classification", "evidence_source", "zpr_attribution",
+    "correlation_confidence", "correlation_reason", "matched_policy_id",
+    "matched_policy_name", "has_unmodeled_policy_filters",
+    "source_type", "destination_type", "source_cidrs", "destination_cidrs",
+    "source_ips", "destination_ips",
+    "source_port", "protocol", "flow_id", "bytes_out", "packets",
+    "capture_status", "capture_start_time", "capture_end_time",
+    "source_resource_id", "source_resource_name",
     "destination_resource_id", "destination_resource_name",
     "source_security_attributes", "destination_security_attributes",
     "zpr_destination", "matched_expected_policy",
     # zpr_policy_drift records (statement_hash change across runs)
-    "old_hash", "new_hash",
+    "change_type", "old_statement", "new_statement", "old_hash", "new_hash",
+    # zpr_run / zpr_coverage / zpr_collection_gap records
+    "collection_status", "flow_collection_status", "record_count",
+    "finding_count", "drift_count", "flow_count", "collection_error_count",
+    "coverage_status", "eligible_count", "protected_count",
+    "collection_service", "collection_operation", "error_category",
 ]
 
 SAMPLE_CONTENT = (
-    '{"record_type":"zpr_finding","snapshot_time":"2026-06-03T10:00:00Z",'
+    '{"record_type":"zpr_finding","event_time":"2026-06-03T10:00:00Z",'
     '"severity":"CRITICAL","finding_type":"broad_cidr_exception",'
     '"policy_name":"web-db","cidr":"0.0.0.0/0"}'
 )
@@ -109,8 +128,8 @@ def ensure_fields(la, ns) -> dict[str, str]:
         mapping[token] = created.name
         by_lower[key] = created.name
         created_n += 1
-        print(f"  field created: {token} -> {created.name}")
-    print(f"fields ready: {len(mapping)} (created {created_n}, reused {reused_n})")
+        _say(f"  field created: {token} -> {created.name}")
+    _say(f"fields ready: {len(mapping)} (created {created_n}, reused {reused_n})")
     return mapping
 
 
@@ -118,12 +137,13 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
     m = oci.log_analytics.models
     maps = []
     seq = 1
-    # timestamp: snapshot_time -> system Time field
+    # timestamp: event_time -> system Time field for inventory, flow, drift,
+    # health, and coverage records alike.
     maps.append(
         m.LogAnalyticsParserField(
             field=m.LogAnalyticsField(name="time"),
             parser_field_name="time", storage_field_name="time",
-            parser_field_sequence=seq, structured_column_info="$.snapshot_time",
+            parser_field_sequence=seq, structured_column_info="$.event_time",
         )
     )
     seq += 1
@@ -155,7 +175,7 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
         pass
     kwargs = {"if_match": etag} if etag else {}
     la.upsert_parser(namespace_name=ns, upsert_log_analytics_parser_details=details, **kwargs)
-    print(f"parser ready: {PARSER_NAME} ({len(maps)} field maps)")
+    _say(f"parser ready: {PARSER_NAME} ({len(maps)} field maps)")
     return PARSER_NAME
 
 
@@ -178,11 +198,10 @@ def _find_source(la, ns, tenancy_id):
 def ensure_source(la, ns, tenancy_id, parser_name: str) -> str:
     m = oci.log_analytics.models
     existing = _find_source(la, ns, tenancy_id)
-    if existing:
-        print(f"source exists: {existing.display_name} (iname={existing.name})")
-        return existing.display_name
+    internal_name = existing.name if existing else SOURCE_NAME
+    display_name = existing.display_name if existing else SOURCE_DISPLAY_NAME
     details = m.UpsertLogAnalyticsSourceDetails(
-        name=SOURCE_NAME, display_name=SOURCE_DISPLAY_NAME,
+        name=internal_name, display_name=display_name,
         description="OCI ZPR policy, resource, finding, and enriched flow records.",
         type_name="os_file", is_for_cloud=False, is_system=False,
         parsers=[m.LogAnalyticsParser(name=parser_name, display_name=PARSER_DISPLAY_NAME,
@@ -191,15 +210,16 @@ def ensure_source(la, ns, tenancy_id, parser_name: str) -> str:
             entity_type="oci_generic_resource")],
     )
     etag = None
-    try:
-        etag = la.get_source(namespace_name=ns, source_name=SOURCE_NAME,
-                             compartment_id=tenancy_id).headers.get("etag")
-    except oci.exceptions.ServiceError:
-        pass
+    if existing:
+        try:
+            etag = la.get_source(namespace_name=ns, source_name=internal_name,
+                                 compartment_id=tenancy_id).headers.get("etag")
+        except oci.exceptions.ServiceError:
+            pass
     kwargs = {"if_match": etag} if etag else {}
     la.upsert_source(namespace_name=ns, upsert_log_analytics_source_details=details, **kwargs)
-    print(f"source ready: {SOURCE_DISPLAY_NAME}")
-    return SOURCE_DISPLAY_NAME
+    _say(f"source {'updated' if existing else 'ready'}: {display_name}")
+    return display_name
 
 
 def ensure_log_group(la, ns, tenancy_id, name: str) -> str:
@@ -209,7 +229,7 @@ def ensure_log_group(la, ns, tenancy_id, name: str) -> str:
         compartment_id=tenancy_id, limit=200
     ).data:
         if lg.display_name == name:
-            print(f"log group exists: {name} -> {lg.id}")
+            _say(f"log group exists: {name}")
             return lg.id
     created = la.create_log_analytics_log_group(
         namespace_name=ns,
@@ -218,7 +238,7 @@ def ensure_log_group(la, ns, tenancy_id, name: str) -> str:
             description="ZPR visibility ingestion target",
         ),
     ).data
-    print(f"log group created: {name} -> {created.id}")
+    _say(f"log group created: {name}")
     return created.id
 
 
@@ -237,37 +257,39 @@ def upload_records(la, ns, log_group_id: str, records_path: str) -> int:
         content_type="application/octet-stream",
         char_encoding="UTF-8",
     )
-    print(f"uploaded {records_path} -> status {resp.status} "
-          f"(request {resp.headers.get('opc-request-id', 'n/a')})")
+    _say(f"uploaded sanitized evidence -> status {resp.status}")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _QUIET
     p = argparse.ArgumentParser()
     p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
     p.add_argument("--config-file", default=None)
-    p.add_argument("--profile", default="cap")
-    p.add_argument("--region", default="eu-frankfurt-1")
+    p.add_argument("--profile", default="DEFAULT")
+    p.add_argument("--region", default=None)
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--upload", help="JSONL records file to ingest into LA after provisioning")
+    p.add_argument("--quiet", action="store_true", help="suppress identifiers and provisioning details")
     args = p.parse_args(argv)
+    _QUIET = args.quiet
 
     session, la, ns = _client(args.auth, args.config_file, args.profile, args.region)
     tenancy_id = session.tenancy_id
-    print(f"namespace: {ns}")
+    _say("Log Analytics namespace resolved")
     field_map = ensure_fields(la, ns)
     lg_id = ensure_log_group(la, ns, tenancy_id, args.log_group_name)
     parser_name = ensure_parser(la, ns, field_map)
     source_name = ensure_source(la, ns, tenancy_id, parser_name)
 
-    print("\nProvisioned:")
-    print(f"  fields     = {len(field_map)} ready")
-    print(f"  log_group  = {lg_id}")
-    print(f"  parser     = {parser_name}")
-    print(f"  source     = {source_name}")
+    _say("\nProvisioned:")
+    _say(f"  fields     = {len(field_map)} ready")
+    _say("  log_group  = ready")
+    _say("  parser     = ready")
+    _say("  source     = ready")
 
     if args.upload:
-        print()
+        _say()
         upload_records(la, ns, lg_id, args.upload)
     return 0
 
