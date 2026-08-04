@@ -87,19 +87,26 @@ These values are review queues, not proof that ZPR allowed or denied a packet.
 ### 6. `zpr_coverage` — supported-resource collection coverage
 
 One row per current OCI ZPR-supported resource type. `COLLECTED` means this
-collector inspected that type; `NOT_COLLECTED` is an explicit product coverage
-gap, never a claim that the tenant has zero resources of that type.
+collector inspected that type across the whole scanned tenancy; `PARTIAL` means
+some compartment or list call failed, so the counts describe a fraction of the
+tenancy; `NOT_COLLECTED` is an explicit product coverage gap, never a claim that
+the tenant has zero resources of that type.
 
 ### 7. `zpr_collection_gap` — read/collection failures
 
 Sanitized service, operation, resource type, and exception category. Messages,
-OCIDs, names, and topology are intentionally excluded.
+OCIDs, names, and topology are intentionally excluded. Identical failures are
+collapsed into one record with `occurrence_count`, so a least-privilege
+principal in a large tenancy produces a readable table instead of one HIGH row
+per denied call; the run record's `collection_error_count` keeps the true total.
 
 ### 8. `zpr_run` — freshness and pipeline health
 
 Carries collection/flow status and record, finding, drift, flow, and error
 counts for one opaque run ID. A visible run record proves that exact run reached
-Log Analytics inside the selected time window.
+Log Analytics inside the selected time window. `flow_collection_status` is one
+of `NOT_CONFIGURED`, `SUCCEEDED`, or `FAILED`; `validate-dashboards` uses it to
+decide whether flow-dependent widgets are expected to hold data at all.
 
 ## Example record (a finding)
 

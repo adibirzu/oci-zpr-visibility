@@ -17,6 +17,7 @@ import sys
 import oci
 
 from . import dashboard as dash_mod
+from .logutil import describe_exception
 
 DISPLAY_NAME = "OCI ZPR Visibility"
 DASHBOARD_ID = "oci-zpr-visibility"
@@ -240,7 +241,7 @@ def main(argv=None) -> int:
                     print(f"  replaced existing dashboard: {item['displayName']}")
     except oci.exceptions.ServiceError as exc:
         if not args.quiet:
-            print(f"  (list/delete skipped: {exc.__class__.__name__})")
+            print(f"  (list/delete skipped: {describe_exception(exc)})")
     details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=built)
     md.import_dashboard(details)
     if not args.quiet:

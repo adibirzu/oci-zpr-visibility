@@ -62,6 +62,42 @@ class CollectorCoverageTests(unittest.TestCase):
         self.assertEqual(by_type["vcn"]["coverage_status"], "PARTIAL")
         self.assertEqual(by_type["vcn"]["eligible_count"], 2)
 
+    def test_failed_compartment_enumeration_downgrades_every_collector(self):
+        """Only the tenancy root was scanned, so per-type success still means
+        the counts describe a fraction of the tenancy."""
+        collector = ZprCollector(_FakeSession())
+        collector.coverage_counts = {
+            "vcn": {"eligible": 1, "protected": 1},
+            "instance": {"eligible": 4, "protected": 0},
+        }
+        collector.compartment_scope_complete = False
+        by_type = {
+            record["resource_type"]: record
+            for record in collector._coverage_records("2026-01-01T00:00:00Z", True)
+        }
+        self.assertEqual(by_type["vcn"]["coverage_status"], "PARTIAL")
+        self.assertEqual(by_type["instance"]["coverage_status"], "PARTIAL")
+        self.assertEqual(by_type["instance"]["eligible_count"], 4)
+
+
+class CollectionGapTests(unittest.TestCase):
+    def test_repeated_identical_failures_collapse_into_one_record(self):
+        collector = ZprCollector(_FakeSession())
+        for _ in range(150):
+            collector._collection_error(
+                service="Networking", operation="list_vcns",
+                resource_type="vcn", exc=PermissionError("denied"),
+            )
+        collector._collection_error(
+            service="Compute", operation="list_instances",
+            resource_type="instance", exc=PermissionError("denied"),
+        )
+        self.assertEqual(len(collector.collection_errors), 2)
+        self.assertEqual(collector.collection_errors[0]["occurrence_count"], 150)
+        self.assertEqual(collector.collection_errors[1]["occurrence_count"], 1)
+        self.assertEqual(collector.collection_error_count, 151)
+        self.assertEqual(collector.coverage_failures, {"vcn", "instance"})
+
 
 if __name__ == "__main__":
     unittest.main()

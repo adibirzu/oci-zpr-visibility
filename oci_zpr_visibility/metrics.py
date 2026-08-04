@@ -47,7 +47,9 @@ def build_metric_values(records: list[dict[str, Any]]) -> dict[str, int]:
         "flows_rejected_policy_expected_allow": flow_count(
             "rejected_policy_expected_allow", "suspected_misconfiguration"
         ),
-        "collection_errors": len(collection_gaps),
+        # Gap records are deduplicated per (service, operation, resource_type,
+        # error_category), so the alarm-facing count sums their occurrences.
+        "collection_errors": sum(int(gap.get("occurrence_count") or 1) for gap in collection_gaps),
         "resource_coverage_gaps": len(coverage_gaps),
         "heartbeat": 1,
     }

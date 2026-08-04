@@ -46,5 +46,5 @@ the validated `OCI ZPR Visibility JSON` source (all 14 queries already HIT).
 
 ## Acceptance
 - `pytest` green (new dashboard schema/layout tests).
-- `oci-zpr-visibility validate-dashboards` → all widgets HIT in cap.
+- `oci-zpr-visibility validate-dashboards` → all widgets HIT in the staging tenancy.
 - `oci-zpr-visibility deploy-dashboard --dry-run` shows the import plan; live deploy renders the dashboard with the new visualizations.

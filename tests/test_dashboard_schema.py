@@ -101,6 +101,23 @@ class DashboardSchemaTests(unittest.TestCase):
             {"Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)", "Collection gaps"},
         )
 
+    def test_flow_dependent_widgets_declare_their_dependency(self):
+        """Without the marker, a tenancy that never enabled VCN flow logs would
+        fail the live gate on widgets that cannot have data."""
+        for w in dashboard.iter_widgets(self.dash):
+            if dashboard.FLOW_RECORD_TYPE in w["query"]:
+                self.assertEqual(
+                    w.get("data_dependency"), dashboard.FLOW_DEPENDENCY, w["name"]
+                )
+
+    def test_unknown_data_dependency_is_a_schema_error(self):
+        dash = {"tabs": [{"name": "t", "widgets": [{
+            "name": "w", "query": "'Log Source' = 'OCI ZPR Visibility JSON'",
+            "visualization_type": "table", "layout": {"width": 6, "height": 2},
+            "data_dependency": "weather",
+        }]}]}
+        self.assertTrue(any("data_dependency" in e for e in dashboard.validate_dashboard(dash)))
+
 
 if __name__ == "__main__":
     unittest.main()

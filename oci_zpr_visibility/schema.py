@@ -9,6 +9,19 @@ from .jsonutil import utc_now_iso
 
 SCHEMA_VERSION = "2.0"
 
+# Single vocabulary for zpr_run.flow_collection_status. Every producer must use
+# these tokens: the "Flow collection status" widget groups on the raw value, and
+# validate-dashboards decides whether flow-dependent widgets are applicable by
+# looking for a run whose status is not NOT_CONFIGURED.
+FLOW_STATUS_NOT_CONFIGURED = "NOT_CONFIGURED"
+FLOW_STATUS_SUCCEEDED = "SUCCEEDED"
+FLOW_STATUS_FAILED = "FAILED"
+FLOW_COLLECTION_STATUSES = (
+    FLOW_STATUS_NOT_CONFIGURED,
+    FLOW_STATUS_SUCCEEDED,
+    FLOW_STATUS_FAILED,
+)
+
 
 def new_run_id() -> str:
     """Return an opaque correlation identifier that carries no tenant detail."""
@@ -66,6 +79,11 @@ def run_record(
     collection_error_count: int = 0,
 ) -> dict[str, Any]:
     """Build a non-sensitive heartbeat/data-quality record for Log Analytics."""
+    if flow_collection_status not in FLOW_COLLECTION_STATUSES:
+        raise ValueError(
+            f"flow_collection_status must be one of {FLOW_COLLECTION_STATUSES}, "
+            f"got {flow_collection_status!r}"
+        )
     return normalize_record(
         {
             "record_type": "zpr_run",

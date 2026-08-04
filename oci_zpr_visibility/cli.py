@@ -17,7 +17,7 @@ from .logging_ingestion import emit_records
 from .logutil import emit
 from .oci_clients import build_session
 from .policy_parser import policy_statement_records
-from .schema import new_run_id, normalize_records, run_record
+from .schema import FLOW_STATUS_NOT_CONFIGURED, new_run_id, normalize_records, run_record
 
 
 def _session(args: argparse.Namespace) -> Any:
@@ -47,12 +47,14 @@ def cmd_collect(args: argparse.Namespace) -> int:
             run_id=run_id,
             event_time=snapshot_time,
             collection_status="SUCCEEDED_WITH_GAPS" if snapshot.get("collection_errors") else "SUCCEEDED",
-            flow_collection_status="NOT_REQUESTED",
+            flow_collection_status=FLOW_STATUS_NOT_CONFIGURED,
             record_count=len(records),
             finding_count=len(findings),
             drift_count=0,
             flow_count=0,
-            collection_error_count=len(snapshot.get("collection_errors", [])),
+            collection_error_count=int(
+                snapshot.get("collection_error_count") or len(snapshot.get("collection_errors", []))
+            ),
         )
     )
 
@@ -139,6 +141,9 @@ def cmd_demo(args: argparse.Namespace) -> int:
         policy_records.extend(policy_statement_records(policy, snapshot.get("snapshot_time", "")))
     run_id = new_run_id()
     snapshot_time = str(snapshot.get("snapshot_time") or "")
+    statements = normalize_records(
+        policy_records, run_id=run_id, inventory_snapshot_time=snapshot_time
+    )
     findings = normalize_records(
         generate_findings(snapshot, policy_records),
         run_id=run_id,
@@ -150,7 +155,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         inventory_snapshot_time=snapshot_time,
     )
     write_json(root / "snapshot.json", snapshot)
-    write_jsonl(root / "records.jsonl", [*policy_records, *findings])
+    write_jsonl(root / "records.jsonl", [*statements, *findings])
     write_jsonl(root / "enriched_flows.jsonl", enriched)
     emit({"output_dir": str(root), "policy_records": len(policy_records),
           "findings": len(findings), "enriched": len(enriched)},

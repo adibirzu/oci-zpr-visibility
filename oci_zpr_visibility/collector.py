@@ -67,8 +67,11 @@ class ZprCollector:
         self.session = session
         self.oci = session.oci
         self.collection_errors: list[dict[str, Any]] = []
+        self.collection_error_count = 0
         self.coverage_counts: dict[str, dict[str, int]] = {}
         self.coverage_failures: set[str] = set()
+        self.compartment_scope_complete = True
+        self._collection_error_index: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
 
     def enable_zpr(self, dry_run: bool = False) -> dict[str, Any]:
         zpr = client(self.session, "zpr.ZprClient")
@@ -79,8 +82,11 @@ class ZprCollector:
 
     def collect(self, include_resources: bool = True, resource_query: str | None = None) -> dict[str, Any]:
         self.collection_errors = []
+        self.collection_error_count = 0
         self.coverage_counts = {}
         self.coverage_failures = set()
+        self.compartment_scope_complete = True
+        self._collection_error_index = {}
         snapshot_time = utc_now_iso()
         snapshot: dict[str, Any] = {
             "snapshot_time": snapshot_time,
@@ -93,6 +99,7 @@ class ZprCollector:
             "resources": [],
             "ip_resource_map": [],
             "collection_errors": [],
+            "collection_error_count": 0,
             "resource_coverage": [],
         }
         namespaces, attributes = self._collect_security_attributes()
@@ -105,6 +112,7 @@ class ZprCollector:
             snapshot["ip_resource_map"] = self._build_ip_map(resources)
 
         snapshot["collection_errors"] = list(self.collection_errors)
+        snapshot["collection_error_count"] = self.collection_error_count
         snapshot["resource_coverage"] = self._coverage_records(snapshot_time, include_resources)
 
         return snapshot
@@ -140,32 +148,53 @@ class ZprCollector:
         return records
 
     def _collection_error(self, *, service: str, operation: str, resource_type: str | None, exc: Exception) -> None:
+        """Record one collection gap, collapsing repeats of the same failure.
+
+        These calls sit inside per-compartment and per-resource loops, so a
+        least-privilege principal in a large tenancy would otherwise emit one
+        HIGH record per denied call. Identical failures collapse into a single
+        record carrying `occurrence_count`; `collection_error_count` keeps the
+        true total for metrics and the run heartbeat.
+        """
         now = utc_now_iso()
         if resource_type:
             self.coverage_failures.add(resource_type)
-        self.collection_errors.append(
-            {
-                "record_type": "zpr_collection_gap",
-                "snapshot_time": now,
-                "event_time": now,
-                "severity": "HIGH",
-                "collection_service": service,
-                "collection_operation": operation,
-                "resource_type": resource_type,
-                "error_category": exc.__class__.__name__,
-                "recommendation": "Verify least-privilege read access and rerun collection.",
-            }
-        )
+        self.collection_error_count += 1
+        key = (service, operation, resource_type, exc.__class__.__name__)
+        existing = self._collection_error_index.get(key)
+        if existing is not None:
+            existing["occurrence_count"] += 1
+            return
+        record = {
+            "record_type": "zpr_collection_gap",
+            "snapshot_time": now,
+            "event_time": now,
+            "severity": "HIGH",
+            "collection_service": service,
+            "collection_operation": operation,
+            "resource_type": resource_type,
+            "error_category": exc.__class__.__name__,
+            "occurrence_count": 1,
+            "recommendation": "Verify least-privilege read access and rerun collection.",
+        }
+        self._collection_error_index[key] = record
+        self.collection_errors.append(record)
 
     def _coverage_records(self, snapshot_time: str, include_resources: bool) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
+        # A failed compartment enumeration means only the tenancy root was
+        # scanned, so every implemented collector saw a partial tenancy even
+        # when its own list calls all succeeded.
+        scope_incomplete = not self.compartment_scope_complete
         for resource_type in ZPR_SUPPORTED_RESOURCE_TYPES:
             counts = self.coverage_counts.get(resource_type, {})
             implemented = resource_type in {"vcn", "instance"}
-            if include_resources and implemented and resource_type in self.coverage_failures:
+            if not (include_resources and implemented):
+                status = "NOT_COLLECTED"
+            elif scope_incomplete or resource_type in self.coverage_failures:
                 status = "PARTIAL"
             else:
-                status = "COLLECTED" if include_resources and implemented else "NOT_COLLECTED"
+                status = "COLLECTED"
             records.append(
                 {
                     "record_type": "zpr_coverage",
@@ -233,6 +262,7 @@ class ZprCollector:
                 )
             ]
         except Exception as exc:
+            self.compartment_scope_complete = False
             self._collection_error(
                 service="Identity", operation="list_compartments", resource_type=None, exc=exc
             )

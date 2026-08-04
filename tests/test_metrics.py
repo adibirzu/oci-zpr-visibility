@@ -35,6 +35,15 @@ class BuildMetricValuesTests(unittest.TestCase):
         self.assertEqual(m["flows_accepted_requires_policy_review"], 0)
         self.assertEqual(m["heartbeat"], 1)
 
+    def test_collection_errors_sum_deduplicated_occurrences(self):
+        """Gap records collapse per failure signature; the alarm-facing metric
+        must still reflect how many reads actually failed."""
+        values = build_metric_values([
+            _rec("zpr_collection_gap", error_category="ServiceError", occurrence_count=195),
+            _rec("zpr_collection_gap", error_category="ServiceError", occurrence_count=195),
+        ])
+        self.assertEqual(values["collection_errors"], 390)
+
     def test_legacy_classification_is_counted_during_migration(self):
         values = build_metric_values([
             _rec("zpr_enriched_flow", classification="unexpected_accepted")

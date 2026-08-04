@@ -18,9 +18,9 @@ class CliSubcommandTests(unittest.TestCase):
             return 0
 
         with mock.patch("oci_zpr_visibility.validate_dashboards.main", fake_main):
-            rc = cli.main(["validate-dashboards", "--profile", "cap", "--lookback-days", "7"])
+            rc = cli.main(["validate-dashboards", "--profile", "example-profile", "--lookback-days", "7"])
         self.assertEqual(rc, 0)
-        self.assertEqual(captured["argv"], ["--profile", "cap", "--lookback-days", "7"])
+        self.assertEqual(captured["argv"], ["--profile", "example-profile", "--lookback-days", "7"])
 
     def test_provision_la_routes_to_module(self):
         captured = {}
@@ -30,10 +30,10 @@ class CliSubcommandTests(unittest.TestCase):
             return 0
 
         with mock.patch("oci_zpr_visibility.provision_la.main", fake_main):
-            rc = cli.main(["provision-la", "--profile", "cap", "--upload", "x.jsonl"])
+            rc = cli.main(["provision-la", "--profile", "example-profile", "--upload", "x.jsonl"])
 
         self.assertEqual(rc, 0)
-        self.assertEqual(captured["argv"], ["--profile", "cap", "--upload", "x.jsonl"])
+        self.assertEqual(captured["argv"], ["--profile", "example-profile", "--upload", "x.jsonl"])
 
     def test_trigger_routes_to_module(self):
         captured = {}

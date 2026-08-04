@@ -69,6 +69,7 @@
     "coverage_status",
     "collection_service",
     "collection_operation",
-    "error_category"
+    "error_category",
+    "occurrence_count"
   ]
 }

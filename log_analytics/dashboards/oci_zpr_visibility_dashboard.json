@@ -53,7 +53,8 @@
             "width": 2,
             "height": 2
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "KPI: Accepted for policy review",
@@ -63,7 +64,8 @@
             "width": 3,
             "height": 2
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Active ZPR policies",
@@ -230,16 +232,17 @@
           },
           "visualization_options": {
             "classification_colors": {
-              "expected_accepted": "#3A8745",
-              "expected_blocked": "#8A8A8A",
-              "unexpected_accepted": "#C74634",
-              "suspected_misconfiguration": "#E8730C",
+              "policy_consistent_accept": "#3A8745",
+              "rejected_protected_destination": "#8A8A8A",
+              "accepted_requires_policy_review": "#C74634",
+              "rejected_policy_expected_allow": "#E8730C",
               "needs_enrichment": "#5B6770"
             }
           },
           "ask_ai_prompts": [
             "Break down flows by action and classification over time."
-          ]
+          ],
+          "data_dependency": "flow"
         },
         {
           "name": "Flow review trend",
@@ -249,7 +252,8 @@
             "width": 6,
             "height": 5
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Flow capture quality",
@@ -259,7 +263,8 @@
             "width": 6,
             "height": 5
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Rejected protected destinations",
@@ -271,16 +276,17 @@
           },
           "visualization_options": {
             "classification_colors": {
-              "expected_accepted": "#3A8745",
-              "expected_blocked": "#8A8A8A",
-              "unexpected_accepted": "#C74634",
-              "suspected_misconfiguration": "#E8730C",
+              "policy_consistent_accept": "#3A8745",
+              "rejected_protected_destination": "#8A8A8A",
+              "accepted_requires_policy_review": "#C74634",
+              "rejected_policy_expected_allow": "#E8730C",
               "needs_enrichment": "#5B6770"
             }
           },
           "ask_ai_prompts": [
             "Which rejected flows targeted ZPR-protected destinations?"
-          ]
+          ],
+          "data_dependency": "flow"
         },
         {
           "name": "Accepted flows requiring policy review",
@@ -292,16 +298,17 @@
           },
           "visualization_options": {
             "classification_colors": {
-              "expected_accepted": "#3A8745",
-              "expected_blocked": "#8A8A8A",
-              "unexpected_accepted": "#C74634",
-              "suspected_misconfiguration": "#E8730C",
+              "policy_consistent_accept": "#3A8745",
+              "rejected_protected_destination": "#8A8A8A",
+              "accepted_requires_policy_review": "#C74634",
+              "rejected_policy_expected_allow": "#E8730C",
               "needs_enrichment": "#5B6770"
             }
           },
           "ask_ai_prompts": [
             "Which accepted flows lack an expected ZPR policy?"
-          ]
+          ],
+          "data_dependency": "flow"
         },
         {
           "name": "Flow path link (src to dst)",
@@ -313,16 +320,17 @@
           },
           "visualization_options": {
             "classification_colors": {
-              "expected_accepted": "#3A8745",
-              "expected_blocked": "#8A8A8A",
-              "unexpected_accepted": "#C74634",
-              "suspected_misconfiguration": "#E8730C",
+              "policy_consistent_accept": "#3A8745",
+              "rejected_protected_destination": "#8A8A8A",
+              "accepted_requires_policy_review": "#C74634",
+              "rejected_policy_expected_allow": "#E8730C",
               "needs_enrichment": "#5B6770"
             }
           },
           "ask_ai_prompts": [
             "Trace flows from source to destination by classification."
-          ]
+          ],
+          "data_dependency": "flow"
         }
       ]
     },
@@ -372,7 +380,8 @@
             "width": 3,
             "height": 2
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "DET: Rejected expected allow",
@@ -382,7 +391,8 @@
             "width": 3,
             "height": 2
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "DET: Blocked to protected",
@@ -392,7 +402,8 @@
             "width": 3,
             "height": 2
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "DET: Broad CIDR exceptions",
@@ -412,7 +423,8 @@
             "width": 12,
             "height": 4
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)",
@@ -423,7 +435,8 @@
             "width": 12,
             "height": 4
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Detection: blocked to protected (ZPR-Blocked-Protected)",
@@ -433,7 +446,8 @@
             "width": 12,
             "height": 4
           },
-          "visualization_options": {}
+          "visualization_options": {},
+          "data_dependency": "flow"
         },
         {
           "name": "Detection: broad CIDR exceptions (ZPR-Broad-CIDR)",
@@ -493,7 +507,7 @@
         {
           "name": "Collection gaps",
           "allow_zero": true,
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, collection_operation, resource_type, error_category, recommendation, run_id",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, collection_operation, resource_type, error_category, occurrence_count, recommendation, run_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,

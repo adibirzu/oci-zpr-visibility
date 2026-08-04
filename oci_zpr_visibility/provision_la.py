@@ -78,7 +78,7 @@ FIELD_TOKENS = [
     "collection_status", "flow_collection_status", "record_count",
     "finding_count", "drift_count", "flow_count", "collection_error_count",
     "coverage_status", "eligible_count", "protected_count",
-    "collection_service", "collection_operation", "error_category",
+    "collection_service", "collection_operation", "error_category", "occurrence_count",
 ]
 
 SAMPLE_CONTENT = (

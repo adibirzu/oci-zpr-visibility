@@ -20,10 +20,17 @@ from . import provision_la
 from .collector import ZprCollector
 from .findings import generate_findings
 from .jsonutil import write_jsonl
-from .logutil import emit
+from .logutil import describe_exception, emit
 from .oci_clients import build_session
 from .state import compute_drift, load_previous_records, save_records
-from .schema import new_run_id, normalize_records, run_record
+from .schema import (
+    FLOW_STATUS_FAILED,
+    FLOW_STATUS_NOT_CONFIGURED,
+    FLOW_STATUS_SUCCEEDED,
+    new_run_id,
+    normalize_records,
+    run_record,
+)
 
 
 def main(argv=None) -> int:
@@ -59,7 +66,7 @@ def main(argv=None) -> int:
     # zpr_enriched_flow records so the dashboard's traffic KPIs populate. A flow
     # failure must not break inventory/findings ingestion.
     flows: list[dict] = []
-    flow_collection_status = "NOT_CONFIGURED"
+    flow_collection_status = FLOW_STATUS_NOT_CONFIGURED
     if args.flow_log_group_id and args.flow_log_id:
         try:
             from datetime import datetime, timedelta, timezone
@@ -75,11 +82,11 @@ def main(argv=None) -> int:
                 start.strftime(fmt), end.strftime(fmt),
             )
             flows = correlate_flow_records(raw_flows, snapshot, policy_records)
-            flow_collection_status = "SUCCEEDED"
+            flow_collection_status = FLOW_STATUS_SUCCEEDED
         except Exception as exc:  # noqa: BLE001 - traffic KPIs are best-effort
-            flow_collection_status = "FAILED"
+            flow_collection_status = FLOW_STATUS_FAILED
             if not args.quiet:
-                print(f"WARN: flow correlation failed: {exc.__class__.__name__}", file=sys.stderr)
+                print(f"WARN: flow correlation failed: {describe_exception(exc)}", file=sys.stderr)
 
     previous = load_previous_records(session, args.state_bucket)
     drift = compute_drift(previous, records)
@@ -90,7 +97,10 @@ def main(argv=None) -> int:
         run_id=run_id,
         inventory_snapshot_time=snapshot_time,
     )
-    collection_error_count = len(snapshot.get("collection_errors", []))
+    # Gap records are deduplicated; the snapshot carries the true occurrence total.
+    collection_error_count = int(
+        snapshot.get("collection_error_count") or len(snapshot.get("collection_errors", []))
+    )
     all_records.append(
         run_record(
             run_id=run_id,
@@ -108,8 +118,10 @@ def main(argv=None) -> int:
         write_jsonl(Path(fh.name), all_records)
         records_path = fh.name
 
-    prov_argv = ["--auth", args.auth, "--profile", args.profile, "--region", args.region,
+    prov_argv = ["--auth", args.auth, "--profile", args.profile,
                  "--log-group-name", args.log_group_name, "--upload", records_path]
+    if args.region:
+        prov_argv += ["--region", args.region]
     if args.config_file:
         prov_argv += ["--config-file", args.config_file]
     if args.quiet:
@@ -131,7 +143,7 @@ def main(argv=None) -> int:
         published = publish_metrics(session, all_records)
     except Exception as exc:  # noqa: BLE001 - metrics are best-effort
         if not args.quiet:
-            print(f"WARN: metric publish failed: {exc.__class__.__name__}", file=sys.stderr)
+            print(f"WARN: metric publish failed: {describe_exception(exc)}", file=sys.stderr)
 
     emit(
         {"run_id": run_id, "records": len(records), "findings": len(findings), "drift": len(drift),

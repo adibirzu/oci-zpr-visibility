@@ -32,7 +32,10 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     cfg = oci.config.from_file(profile_name=args.profile)
-    cfg["region"] = args.region
+    if args.region:
+        # Without --region the profile's own region stands; overwriting it with
+        # None would fail validate_config, which requires `region`.
+        cfg["region"] = args.region
     oci.config.validate_config(cfg)
     tid = cfg["tenancy"]
     sa = oci.security_attribute.SecurityAttributeClient(cfg)

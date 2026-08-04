@@ -3,15 +3,15 @@
 Repeatable command sequences for this project. Each is runnable today (or after
 the noted task lands). Keep the live gate (`validate-dashboards`) green.
 
-## W1 — Live e2e refresh (cap)
+## W1 — Live e2e refresh (staging tenancy)
 Collect real ZPR data, ingest to LA, confirm dashboards.
 ```bash
-.venv/bin/oci-zpr-visibility collect --profile cap --region eu-frankfurt-1 --skip-resources \
-  --snapshot out/cap/zpr_snapshot.json --records out/cap/zpr_records.jsonl
-.venv/bin/oci-zpr-visibility trigger --out out/cap/trigger_records.jsonl
-cat out/cap/zpr_records.jsonl out/cap/trigger_records.jsonl > out/cap/all_records.jsonl
-.venv/bin/oci-zpr-visibility provision-la --profile cap --region eu-frankfurt-1 --upload out/cap/all_records.jsonl
-.venv/bin/oci-zpr-visibility validate-dashboards --profile cap --region eu-frankfurt-1   # expect all HIT
+.venv/bin/oci-zpr-visibility collect --profile <PROFILE> --region <REGION> --skip-resources \
+  --snapshot out/zpr_snapshot.json --records out/zpr_records.jsonl
+.venv/bin/oci-zpr-visibility trigger --out out/trigger_records.jsonl
+cat out/zpr_records.jsonl out/trigger_records.jsonl > out/all_records.jsonl
+.venv/bin/oci-zpr-visibility provision-la --profile <PROFILE> --region <REGION> --upload out/all_records.jsonl
+.venv/bin/oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>   # expect all HIT
 ```
 
 ## W2 — Release gate (pre-push)
