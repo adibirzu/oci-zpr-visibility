@@ -125,11 +125,13 @@ Build and import the seven-dashboard OCI LA suite (40 tiles total) from the desc
 ```bash
 oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --dry-run   # preview tiles
 oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION>            # import (idempotent)
-oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm all HIT
+oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm every query parses, executes, and returns expected data
 ```
 
-The dashboard appears under Log Analytics → Dashboards as "OCI ZPR Visibility".
-Re-running deletes the prior same-name dashboard and re-imports (safe to repeat).
+The suite appears under Log Analytics → Dashboards as "OCI ZPR Visibility"
+(executive posture) plus one "OCI ZPR Visibility - <view>" dashboard per
+remaining view. Re-running deletes each prior same-name dashboard and re-imports
+(safe to repeat).
 
 
 ## IAM (least privilege)

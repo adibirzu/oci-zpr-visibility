@@ -11,7 +11,8 @@ Collect real ZPR data, ingest to LA, confirm dashboards.
 .venv/bin/oci-zpr-visibility trigger --out out/trigger_records.jsonl
 cat out/zpr_records.jsonl out/trigger_records.jsonl > out/all_records.jsonl
 .venv/bin/oci-zpr-visibility provision-la --profile <PROFILE> --region <REGION> --upload out/all_records.jsonl
-.venv/bin/oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>   # expect all HIT
+.venv/bin/oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION> \
+  --expected-run-id <RUN_ID_REPORTED_BY_COLLECT> --expected-record-count <UPLOADED_COUNT>   # expect 0 ZERO, 0 ERROR
 ```
 
 ## W2 — Release gate (pre-push)

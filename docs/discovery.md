@@ -58,8 +58,9 @@ via `list_vcns` / `list_instances` — that is expected.)
 
 ## 2. Provision the Log Analytics source (idempotent)
 
-Creates ~42 custom fields, the JSON parser, the `OCI ZPR Visibility JSON` custom
-source, and the `zpr-visibility-la` log group. Safe to re-run.
+Creates the custom fields (`provision_la.FIELD_TOKENS`), the JSON parser, the
+`OCI ZPR Visibility JSON` custom source, and the `zpr-visibility-la` log group.
+Safe to re-run.
 
 ```bash
 oci-zpr-visibility provision-la --auth api_key --profile <profile> --region <region>
@@ -93,7 +94,8 @@ live traffic correlation (the allow/block KPIs will be empty until you add them)
 oci-zpr-visibility deploy-dashboard --auth api_key --profile <profile> --region <region>
 ```
 
-Open **Log Analytics → Dashboards → OCI ZPR Visibility** (30 widgets / 6 tabs).
+Open **Log Analytics → Dashboards → OCI ZPR Visibility** — the focused dashboard
+suite described in [the README](../README.md#what-the-dashboard-shows).
 
 ## 5. Make it continuous
 

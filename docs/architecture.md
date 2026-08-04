@@ -16,7 +16,7 @@ from your tenancy; never inline them in committed files.
 | Security attributes (definitions) | `list_security_attributes` | snapshot `security_attributes` | — (inventory) |
 | **Protected resources** (VCN/instance tagged) | `core.VirtualNetworkClient.list_vcns`, `core.ComputeClient.list_instances` (Resource Search omits security attrs) + VNIC/IP enrich | `zpr_resource` | Protected resources KPI, by-attribute, by-subnet, detail |
 | ZPR policies + statements | `list_zpr_policies` / `get_zpr_policy` + `policy_parser` | `zpr_policy_statement` | Active policies, statement table, src↔dst matrix, sunburst |
-| Policy enforcement vs traffic | VCN Flow Logs (OCI Logging) ↔ `correlate` | `zpr_enriched_flow` | ACCEPT/REJECT bar, blocked dests, unexpected-accepted, flow link |
+| Policy enforcement vs traffic | VCN Flow Logs (OCI Logging) ↔ `correlate` | `zpr_enriched_flow` | ACCEPT/REJECT bar, blocked dests, accepted-requires-review, flow link |
 | Policy drift over time | Object Storage snapshot state + `state.compute_drift` | `zpr_policy_drift` | Policy drift candidates |
 | Governance findings | `findings.generate_findings` | `zpr_finding` | Top findings sunburst, broad-CIDR, missing-policy, KPI |
 
@@ -35,8 +35,8 @@ from your tenancy; never inline them in committed files.
               ┌───────────┼──────────┼───────────────┼──────────────┼────────┐ │
               │ OCI Logging│  OCI Log Analytics       │ OCI Monitoring│  LA    │ │
               │ custom log │  custom source + parser  │ zpr_visibility│ Mgmt   │ │
-              │ + flow logs│  + 42 fields + log group │ metrics       │ Dash   │ │
-              └─────┬──────┘  └──────────┬───────────┘ └──────┬───────┘ (29    │ │
+              │ + flow logs│  + fields + log group    │ metrics       │ Dash   │ │
+              └─────┬──────┘  └──────────┬───────────┘ └──────┬───────┘ (40    │ │
                     │ Connector Hub      │ dashboard queries  │ alarms        tiles)│
                     │ (flow path)        ▼                    ▼  → Notifications │ │
                     └──────────────▶  OCI Log Analytics Dashboard "OCI ZPR Visibility"
@@ -56,28 +56,33 @@ and reads, in one pass:
 - `core.list_vcns` + `core.list_instances` over the compartment subtree → protected resources (Resource Search omits `securityAttributes`, so Core APIs are used) + VNIC/private-IP enrichment
 
 **B. Transform into normalized records.** The snapshot is turned into flat JSON
-records, each carrying a `record_type` discriminator and a shared `snapshot_time`:
+records, each carrying a `record_type` discriminator plus the shared evidence
+envelope (`schema_version`, opaque `run_id`, `event_time`,
+`inventory_snapshot_time` — see [log-format.md](log-format.md)):
 - `policy_parser` → `zpr_policy_statement` (source/destination attribute, scope, CIDRs, parser confidence)
 - `findings.generate_findings` → `zpr_finding` (broad-CIDR, unprotected-resource, unknown-attribute)
 - `correlate` (VCN Flow Logs ↔ policy intent) → `zpr_enriched_flow` (5 classifications)
 - `state.compute_drift` (vs the previous snapshot in Object Storage) → `zpr_policy_drift`
+- `ZprCollector` coverage/error bookkeeping → `zpr_coverage`, sanitized `zpr_collection_gap`
+- `schema.run_record` → `zpr_run` (freshness + pipeline health for one `run_id`)
 
 **C. Serialize to JSONL.** Records are written one JSON object per line
 (`records.jsonl`) — the exact shape documented in [log-format.md](log-format.md).
 
 **D. Provision the Log Analytics target (idempotent upserts).** `provision-la`:
-1. **Fields** — upserts ~42 custom fields (one per JSON key); reuses system
-   fields case-insensitively so queries use bare tokens.
+1. **Fields** — upserts one custom field per JSON key (authoritative token list:
+   `provision_la.FIELD_TOKENS`); reuses system fields case-insensitively so
+   queries use bare tokens.
 2. **Parser** — a JSON parser (`oci_zpr_visibility_json_parser`) mapping each
    JSON key to its field via `structured_column_info: $.<key>`, and
-   `snapshot_time` → the system **Time** field. Must be
+   `event_time` → the system **Time** field. Must be
    `is_single_line_content=False` + `header_content="$:0"`.
 3. **Source** — `OCI ZPR Visibility JSON` (type `os_file`) bound to that parser.
 4. **Log group** — `zpr-visibility-la` (the ingestion target).
 
 **E. Upload.** `upload_log_file` (LA **Upload API**) streams the JSONL to the
 custom source under the log group. LA runs the parser, extracts the fields, and
-stamps **Time** from `snapshot_time`. Records are immediately queryable as
+stamps **Time** from `event_time`. Records are immediately queryable as
 `'Log Source' = 'OCI ZPR Visibility JSON'`.
 
 **F. Publish metrics + repeat.** `metrics.publish_metrics` posts gauges to the
@@ -121,8 +126,8 @@ ZprCollector.collect ──▶ snapshot.json
   metrics.publish_metrics → Monitoring zpr_visibility namespace (alarms)
 ```
 
-Record types (discriminator `record_type`): `zpr_policy_statement`,
-`zpr_resource`, `zpr_finding`, `zpr_enriched_flow`, `zpr_policy_drift`.
+Record types (discriminator `record_type`) and their fields are specified in
+[log-format.md](log-format.md).
 
 ## 6. CLI surface
 
@@ -183,8 +188,8 @@ matching records with a `Detection` label via LQL `eval` (see
 - `refresh` (cron / OCI Functions / OKE CronJob — `deploy/oke-cronjob.yaml`):
   collect → drift (Object Storage state) → Upload API → publish metrics.
 - Monitoring alarms (`terraform/alarms.tf`, gated `create_alarms`): CRITICAL/HIGH
-  findings, unexpected-accepted, suspected-misconfiguration, missing heartbeat →
-  Notifications topic.
+  findings, accepted-requires-policy-review flows, rejected-policy-expected-allow
+  flows, collection errors, missing heartbeat → Notifications topic.
 
 ## 9. Identity & access
 

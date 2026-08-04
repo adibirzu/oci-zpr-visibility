@@ -15,7 +15,7 @@ Last run: 2026-08-03. No live identifiers are stored in this repository.
 | Security attributes | `create_security_attribute` (oracle-zpr `app`) | ✅ |
 | Real inventory and coverage data | current-run collector | ✅ fresh evidence uploaded |
 | Rule triggering | `scripts/trigger_rules.py` | ✅ all 5 flow classifications |
-| LA fields + parser + source + log group | `provision-la --quiet` | ✅ 84 fields and updated source/parser |
+| LA fields + parser + source + log group | `provision-la --quiet` | ✅ every `provision_la.FIELD_TOKENS` field ready, source/parser updated |
 | Current-run ingestion | `refresh --quiet` | ✅ 633/633 records indexed in the dashboard window |
 | Dashboard query parse + execute | `validate-dashboards` | ✅ 40/40 queries, 0 errors; 38 data + 2 valid zero states |
 | Management Dashboard import | `deploy-dashboard --quiet` | ✅ 7 dashboards, 40 tiles, 40 saved searches |

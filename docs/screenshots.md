@@ -1,6 +1,7 @@
 # Dashboard Screenshots
 
-The "OCI ZPR Visibility" Management Dashboard (30 widgets across 6 tabs) is built and imported by
+The "OCI ZPR Visibility" Management Dashboard suite (see
+[the README](../README.md#what-the-dashboard-shows)) is built and imported by
 `oci-zpr-visibility deploy-dashboard`. Capture screenshots from the OCI Console
 (Log Analytics → Dashboards → OCI ZPR Visibility) after a data refresh (W1 in
 `.planning/workflows.md`) and add them here:
