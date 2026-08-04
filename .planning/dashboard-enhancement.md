@@ -1,5 +1,12 @@
 # Dashboard Enhancement Spec (native OCI Log Analytics)
 
+> **Archived planning record — delivered; not current guidance.** This is the
+> pre-implementation spec: it describes the 14-widget starting point and the
+> retired per-widget `HIT`/`MISS` validation vocabulary. The delivered suite and
+> its current validation statuses are documented in
+> [docs/validation.md](../docs/validation.md), [docs/runbook.md](../docs/runbook.md),
+> and [ROADMAP.md](../ROADMAP.md).
+
 Goal: turn the 14 bare query-widgets into an attractive, one-command-deployable
 OCI Log Analytics dashboard. Uses ECC `dashboard-builder` skill conventions and
 the validated `OCI ZPR Visibility JSON` source (all 14 queries already HIT).

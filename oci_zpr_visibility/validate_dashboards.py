@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run every ZPR dashboard query against live OCI Log Analytics and report
-HIT / MISS / ERROR per widget.
+DATA / ZERO_ALLOWED / NOT_APPLICABLE / ZERO / ERROR per widget.
 
 This is the end-to-end gate: it executes (not just parses) each query in
 log_analytics/dashboards/oci_zpr_visibility_dashboard.json against the

@@ -234,7 +234,7 @@ def build_parser() -> argparse.ArgumentParser:
 _DELEGATED_SUBCOMMANDS = [
     ("discover", "discover", "Discover an existing tenancy's ZPR setup + print continuous-collection steps."),
     ("provision-la", "provision_la", "Provision LA fields/parser/source/log group; --upload to ingest records."),
-    ("validate-dashboards", "validate_dashboards", "Execute dashboard queries against live LA (HIT/MISS/ERROR)."),
+    ("validate-dashboards", "validate_dashboards", "Execute dashboard queries against live LA (per-widget data/zero/error status)."),
     ("seed", "seed", "Create the 'app' security attribute and a real ZPR policy."),
     ("trigger", "trigger", "Generate flows exercising every detection classification."),
     ("deploy-dashboard", "deploy_dashboard", "Build + import the OCI LA dashboard (--dry-run to preview)."),
