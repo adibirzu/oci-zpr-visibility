@@ -72,6 +72,68 @@ class DashboardSchemaTests(unittest.TestCase):
                     f"{w['name']} has a field-to-field filter after stats",
                 )
 
+    def test_dashboard_exposes_trust_and_collection_health(self):
+        by_name = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}
+        self.assertIn("Flow review trend", by_name)
+        self.assertIn("Latest visibility runs", by_name)
+        self.assertIn("Explicit resource coverage gaps", by_name)
+        self.assertIn("correlation_confidence", by_name["Accepted flows requiring policy review"]["query"])
+        self.assertIn("zpr_attribution", by_name["Rejected protected destinations"]["query"])
+        self.assertEqual(by_name["Flow path link (src to dst)"]["visualization_type"], "link")
+
+    def test_flow_decision_tables_carry_enforcement_honesty_qualifiers(self):
+        # zpr_attribution is always INFERRED_NOT_PROVIDER_VERDICT: ZPR emits no
+        # decision log, so an allow/reject row is inferred from VCN flow logs.
+        # Every per-flow table must show that qualifier next to the decision,
+        # otherwise a reader takes the row as a ZPR enforcement verdict.
+        for w in dashboard.iter_widgets(self.dash):
+            if w.get("visualization_type") != "table":
+                continue
+            q = w["query"]
+            if "record_type = 'zpr_enriched_flow'" not in q:
+                continue
+            self.assertIn("zpr_attribution", q, f"{w['name']} omits zpr_attribution")
+            self.assertIn(
+                "correlation_confidence", q, f"{w['name']} omits correlation_confidence"
+            )
+
+    def test_customer_queries_use_review_classification_for_inferred_flows(self):
+        for name in (
+            "KPI: Accepted for policy review",
+            "Accepted flows requiring policy review",
+            "DET: Accepted policy review",
+            "DET: Rejected expected allow",
+        ):
+            self.assertIn("review_classification", {
+                w["name"]: w for w in dashboard.iter_widgets(self.dash)
+            }[name]["query"])
+
+    def test_zero_result_states_are_explicit_not_implicit(self):
+        allowed = {
+            w["name"] for w in dashboard.iter_widgets(self.dash) if w.get("allow_zero")
+        }
+        self.assertEqual(
+            allowed,
+            {"Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)", "Collection gaps"},
+        )
+
+    def test_flow_dependent_widgets_declare_their_dependency(self):
+        """Without the marker, a tenancy that never enabled VCN flow logs would
+        fail the live gate on widgets that cannot have data."""
+        for w in dashboard.iter_widgets(self.dash):
+            if dashboard.FLOW_RECORD_TYPE in w["query"]:
+                self.assertEqual(
+                    w.get("data_dependency"), dashboard.FLOW_DEPENDENCY, w["name"]
+                )
+
+    def test_unknown_data_dependency_is_a_schema_error(self):
+        dash = {"tabs": [{"name": "t", "widgets": [{
+            "name": "w", "query": "'Log Source' = 'OCI ZPR Visibility JSON'",
+            "visualization_type": "table", "layout": {"width": 6, "height": 2},
+            "data_dependency": "weather",
+        }]}]}
+        self.assertTrue(any("data_dependency" in e for e in dashboard.validate_dashboard(dash)))
+
 
 if __name__ == "__main__":
     unittest.main()

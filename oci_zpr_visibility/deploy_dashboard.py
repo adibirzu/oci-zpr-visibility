@@ -6,7 +6,7 @@ enriched dashboard descriptor (oci_zpr_visibility/dashboard.py) and imports it
 idempotently via DashxApisClient.import_dashboard. `--dry-run` prints the plan.
 
 Usage:
-  oci-zpr-visibility deploy-dashboard --profile cap --region eu-frankfurt-1 [--dry-run]
+  oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> [--dry-run]
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import sys
 import oci
 
 from . import dashboard as dash_mod
+from .logutil import describe_exception
 
 DISPLAY_NAME = "OCI ZPR Visibility"
 DASHBOARD_ID = "oci-zpr-visibility"
@@ -116,9 +117,15 @@ def _saved_search(search_id, widget, compartment_id) -> dict:
     }
 
 
-def build_management_dashboard(dash: dict, compartment_id: str, display_name: str = DISPLAY_NAME) -> dict:
+def build_management_dashboard(
+    dash: dict,
+    compartment_id: str,
+    display_name: str = DISPLAY_NAME,
+    *,
+    tab: dict | None = None,
+) -> dict:
     """Pure builder: dashboard descriptor -> Management Dashboard import JSON."""
-    widgets = dash_mod.iter_widgets(dash)
+    widgets = list(tab.get("widgets", [])) if tab else dash_mod.iter_widgets(dash)
     placed = {p["name"]: p for p in dash_mod.resolve_layout(widgets)}
     tiles, saved = [], []
     seen: dict[str, int] = {}
@@ -143,7 +150,7 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
         })
         saved.append(_saved_search(sid, w, compartment_id))
     return {
-        "dashboardId": DASHBOARD_ID,
+        "dashboardId": DASHBOARD_ID if tab is None else f"{DASHBOARD_ID}-{_slug(tab['name'])}",
         "providerId": "log-analytics",
         "providerName": "Log Analytics",
         "providerVersion": "3.0.0",
@@ -174,14 +181,31 @@ def build_management_dashboard(dash: dict, compartment_id: str, display_name: st
     }
 
 
+def build_management_dashboards(dash: dict, compartment_id: str) -> list[dict]:
+    """Build one focused OCI dashboard per logical visibility view."""
+    built: list[dict] = []
+    for index, tab in enumerate(dash.get("tabs", [])):
+        display_name = DISPLAY_NAME if index == 0 else f"{DISPLAY_NAME} - {tab['name']}"
+        built.append(
+            build_management_dashboard(
+                dash,
+                compartment_id,
+                display_name=display_name,
+                tab=tab,
+            )
+        )
+    return built
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="oci-zpr-visibility deploy-dashboard")
     p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
     p.add_argument("--config-file", default=None)
-    p.add_argument("--profile", default="cap")
-    p.add_argument("--region", default="eu-frankfurt-1")
+    p.add_argument("--profile", default="DEFAULT")
+    p.add_argument("--region", default=None)
     p.add_argument("--compartment-id", default=None, help="defaults to the tenancy OCID")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--quiet", action="store_true", help="suppress target identifiers from output")
     args = p.parse_args(argv)
 
     from .oci_clients import build_session, client
@@ -193,27 +217,35 @@ def main(argv=None) -> int:
     if errors:
         print("dashboard descriptor invalid:", *errors, sep="\n  ", file=sys.stderr)
         return 2
-    built = build_management_dashboard(dash, compartment_id)
-    print(f"dashboard '{built['displayName']}': {len(built['tiles'])} tiles / "
-          f"{len(built['savedSearches'])} saved searches")
+    built = build_management_dashboards(dash, compartment_id)
+    if not args.quiet:
+        print(f"dashboard suite: {len(built)} focused dashboards / "
+              f"{sum(len(item['tiles']) for item in built)} tiles")
 
     if args.dry_run:
-        for t in built["tiles"]:
-            print(f"  tile {t['row']},{t['column']} {t['width']}x{t['height']}  {t['displayName']}")
-        print("dry-run: not imported")
+        if not args.quiet:
+            for item in built:
+                print(f"  {item['displayName']}: {len(item['tiles'])} tiles")
+            print("dry-run: not imported")
         return 0
 
     md = client(session, "management_dashboard.DashxApisClient")
     # idempotent: delete any existing same-name dashboard first
     try:
-        for d in md.list_management_dashboards(compartment_id=compartment_id, display_name=built["displayName"]).data.items:
-            md.delete_management_dashboard(d.dashboard_id)
-            print(f"  deleted existing dashboard {d.dashboard_id}")
+        for item in built:
+            for d in md.list_management_dashboards(
+                compartment_id=compartment_id, display_name=item["displayName"]
+            ).data.items:
+                md.delete_management_dashboard(d.dashboard_id)
+                if not args.quiet:
+                    print(f"  replaced existing dashboard: {item['displayName']}")
     except oci.exceptions.ServiceError as exc:
-        print(f"  (list/delete skipped: {getattr(exc, 'message', exc)})")
-    details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=[built])
+        if not args.quiet:
+            print(f"  (list/delete skipped: {describe_exception(exc)})")
+    details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=built)
     md.import_dashboard(details)
-    print(f"imported dashboard: {built['displayName']}")
+    if not args.quiet:
+        print(f"imported dashboard suite: {len(built)} dashboards")
     return 0
 
 

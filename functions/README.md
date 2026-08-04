@@ -80,5 +80,5 @@ or when you already have a scheduler.
 - This function runs `refresh` only (it does not import the dashboard). Deploy the
   dashboard once with `deploy-dashboard` (or let the ORM controller do it).
 - Set the `FLOW_LOG_*` config keys to populate traffic KPIs from live VCN Flow
-  Logs. Without them the Function still uploads inventory, findings, drift, and
-  metrics.
+  Logs. Without them the Function still uploads inventory, findings, drift,
+  coverage/collection-health records, and metrics.

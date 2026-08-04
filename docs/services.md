@@ -60,9 +60,11 @@ VCN Flow Logs record ACCEPT/REJECT with src/dst address, protocol, VNIC/subnet/
 compartment OCIDs — but **no ZPR deny-reason field**. So attribution to ZPR
 policy intent is computed by the collector: map flow IPs → resources (via VNIC/
 private IP), resources → security attributes, and attributes → matching policy
-statements. The result is the `zpr_enriched_flow` classification
-(`expected_accepted`, `unexpected_accepted`, `expected_blocked`,
-`suspected_misconfiguration`, `needs_enrichment`).
+statements. The customer-facing result is the conservative
+`review_classification` (`policy_consistent_accept`,
+`accepted_requires_policy_review`, `rejected_protected_destination`,
+`rejected_policy_expected_allow`, or `needs_enrichment`) with confidence and
+an explicit `INFERRED_NOT_PROVIDER_VERDICT` attribution.
 
 ## Identity boundaries
 

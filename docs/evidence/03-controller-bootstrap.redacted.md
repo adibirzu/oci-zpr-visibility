@@ -1,4 +1,4 @@
-# Controller bootstrap — outcome evidence (cap)
+# Controller bootstrap — redacted outcome evidence
 
 After `terraform apply` of orm/, the controller VM (instance principal, no API
 keys) auto-ran provision-la + deploy-dashboard + refresh. Verified via live LA:

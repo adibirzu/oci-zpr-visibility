@@ -3,7 +3,7 @@
 Findings/flows live in Log Analytics, which Monitoring alarms can't read
 directly. We publish per-run counts to the `zpr_visibility` metric namespace so
 Terraform Monitoring alarms (terraform/) can fire on CRITICAL/HIGH findings,
-unexpected-accepted / suspected-misconfiguration flows, and a missing heartbeat.
+flows requiring policy review, and a missing heartbeat.
 """
 from __future__ import annotations
 
@@ -20,15 +20,37 @@ def build_metric_values(records: list[dict[str, Any]]) -> dict[str, int]:
     """Pure: reduce records to the metric counts published each run."""
     findings = [r for r in records if r.get("record_type") == "zpr_finding"]
     flows = [r for r in records if r.get("record_type") == "zpr_enriched_flow"]
+    collection_gaps = [r for r in records if r.get("record_type") == "zpr_collection_gap"]
+    coverage_gaps = [
+        r for r in records
+        if r.get("record_type") == "zpr_coverage" and r.get("coverage_status") != "COLLECTED"
+    ]
 
-    def flow_count(classification: str) -> int:
-        return sum(1 for f in flows if f.get("classification") == classification)
+    def flow_count(review_classification: str, legacy_classification: str) -> int:
+        """Count the evidence-safe label, accepting pre-v2 records during migration."""
+        return sum(
+            1
+            for flow in flows
+            if flow.get("review_classification") == review_classification
+            or (
+                not flow.get("review_classification")
+                and flow.get("classification") == legacy_classification
+            )
+        )
 
     return {
         "findings_total": len(findings),
         "findings_critical_high": sum(1 for f in findings if f.get("severity") in HIGH_SEVERITIES),
-        "flows_unexpected_accepted": flow_count("unexpected_accepted"),
-        "flows_suspected_misconfiguration": flow_count("suspected_misconfiguration"),
+        "flows_accepted_requires_policy_review": flow_count(
+            "accepted_requires_policy_review", "unexpected_accepted"
+        ),
+        "flows_rejected_policy_expected_allow": flow_count(
+            "rejected_policy_expected_allow", "suspected_misconfiguration"
+        ),
+        # Gap records are deduplicated per (service, operation, resource_type,
+        # error_category), so the alarm-facing count sums their occurrences.
+        "collection_errors": sum(int(gap.get("occurrence_count") or 1) for gap in collection_gaps),
+        "resource_coverage_gaps": len(coverage_gaps),
         "heartbeat": 1,
     }
 

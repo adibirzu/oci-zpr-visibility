@@ -11,22 +11,22 @@ Status legend: ✅ done · 🔜 next · 📋 planned · 💡 idea
 - ✅ Policy parser, flow correlation, finding generation (unit-tested)
 - ✅ Terraform: ZPR config, Logging log group + custom log, Connector Hub (flow path)
 - ✅ Log Analytics content provisioner (fields, JSON parser, source, log group)
-- ✅ Operational scripts: `seed_cap.py`, `trigger_rules.py`, `provision_la.py`, `validate_dashboards.py`
-- ✅ End-to-end validated in cap: 14/14 dashboard widgets HIT
+- ✅ Operational scripts: `seed_demo.py`, `trigger_rules.py`, `provision_la.py`, `validate_dashboards.py`
+- ✅ Dashboard query catalog, parser, and current-run validation gates
 - ✅ Docs: architecture, runbook, validation, API/CLI reference, services map
 - ✅ Private GitHub repo + pre-push pytest gate
 
 ## Phase 1 — Hardening & DX (🔜 next)
 
-- ✅ **Dashboard enhancement** — native OCI LA dashboard: 21 widgets (KPI tiles, severity sunburst, flow link), color semantics, drill-downs, and `deploy-dashboard` one-command import. Live 21/21 HIT.
+- ✅ **Dashboard enhancement** — seven focused native OCI LA dashboards with 40 widgets, flow trends/link analysis, conservative evidence labels, collection health, and explicit resource-coverage gaps.
 
 Goal: production-quality reliability and contributor onboarding.
 
 1. ✅ **CLI consolidation** — `provision_la.py`, `validate_dashboards.py`,
-   `seed_cap.py`, `trigger_rules.py` moved into the package and exposed as
+   `seed_demo.py`, `trigger_rules.py` moved into the package and exposed as
    `oci-zpr-visibility provision-la | validate-dashboards | seed | trigger`;
    `scripts/*.py` are now thin shims. Subcommand routing is TDD-tested and the
-   live e2e (14/14) was re-confirmed through the new subcommand.
+   live e2e is bound to an opaque current run ID instead of historical rows.
 2. ✅ **`--version` flag** (`oci-zpr-visibility --version`). 🔜 `--json` global flag + structured logging (replace `print`).
 3. **CI**: GitHub Actions running `pytest` + `terraform validate` on push/PR. ✅ (this phase)
 4. ✅ **Coverage gate** — pure-logic core ≥ 80% (now 90%), enforced in CI.
@@ -40,14 +40,12 @@ Goal: hands-off, scheduled detection refresh.
 1. **Scheduled collector** — OCI Functions or OKE CronJob running
    `collect` + LA `--upload` every 15 min (live) / daily (audit), using
    instance/resource principals (no API keys).
-2. **State & drift** — persist snapshots (Object Storage) so `statement_hash`
-   drift detection works across runs without manual seeding.
+2. ✅ **State & drift** — persist snapshots and emit added, removed, and modified statement evidence; advance state only after successful upload.
 3. **Idempotent re-provision** in the schedule (fields/parser/source are upserts).
 4. **Alerting** — OCI Monitoring alarms on `zpr_finding` severity and
-   `unexpected_accepted` / `suspected_misconfiguration` flow classifications;
+   evidence-safe flow-review classifications;
    route to Notifications (email/Slack/PagerDuty).
-5. **Run health** — emit a `zpr_run` heartbeat record; dashboard widget + alarm
-   on missing heartbeat.
+5. ✅ **Run health** — emit `zpr_run`, `zpr_coverage`, and sanitized `zpr_collection_gap` records; dashboard views + alarms on missing heartbeat/errors.
 
 ## Phase 3 — Coverage & correctness (📋 planned)
 
@@ -63,7 +61,7 @@ Goal: hands-off, scheduled detection refresh.
 
 ## Phase 4 — Multi-tenancy & scale (💡 idea)
 
-1. **Profile/compartment matrix** — run across DEFAULT/cap/emdemo with
+1. **Profile/compartment matrix** — run across tenant-neutral configured profiles with
    per-profile config overlays (mirror the detections project's pattern).
 2. **Central observability tenancy** — aggregate inventory from many tenancies
    into one Log Analytics namespace.
@@ -80,5 +78,5 @@ Goal: hands-off, scheduled detection refresh.
 ## Cross-cutting
 
 - **Security**: no secrets/OCIDs/IPs in repo (placeholder convention); least-privilege IAM; rotate keys.
-- **Testing**: unit (offline) + integration (cap) + e2e (`validate_dashboards.py`); keep the live gate green.
+- **Testing**: unit (offline) + integration (approved OCI target) + e2e (`validate_dashboards.py`); keep the live gate green.
 - **Docs**: keep architecture/API-CLI/services/runbook in sync with code; update on every behavioural change.

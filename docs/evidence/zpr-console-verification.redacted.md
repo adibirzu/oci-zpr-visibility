@@ -1,4 +1,4 @@
-# Live Console Verification — cap (pbncapgemini), eu-frankfurt-1
+# Live Console Verification — redacted target tenant and region
 
 Captured 2026-06-05 against the live lab. OCIDs / private IPs redacted per policy.
 
@@ -26,7 +26,7 @@ via CDP Network on a fresh browser tab).
 
 Live KPI values at capture (**Last 7 Days** window): Active policies **3**,
 Protected resources **10**, Critical+High findings **231**, Blocked flows
-**23**, Unexpected accepted **26** — all five KPIs populated, including the two
+**23**, Accepted for policy review **26** — all five KPIs populated, including the two
 flow KPIs (VCN Flow Logs lag ~10–15 min, so a ≥6h window is needed for those;
 counts accumulate across the 15-min collector cron over the window). A 60-min
 window shows the policy/resource/finding widgets but 0 flows, which is expected.

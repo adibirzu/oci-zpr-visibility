@@ -25,6 +25,13 @@ DASHBOARD_PATH = Path(
 SOURCE_DISPLAY_NAME = "OCI ZPR Visibility JSON"
 GRID_COLUMNS = 12
 
+# Widgets whose evidence only exists when VCN flow log correlation ran. The
+# validation gate treats them as not applicable (rather than passing or failing)
+# when the ingested runs report flow collection was never configured.
+FLOW_DEPENDENCY = "flow"
+VALID_DATA_DEPENDENCIES = {FLOW_DEPENDENCY}
+FLOW_RECORD_TYPE = "zpr_enriched_flow"
+
 VALID_VISUALIZATIONS = {
     "tile", "table", "records", "records_histogram", "table_histogram",
     "bar", "hbar", "line", "pie", "sunburst", "treemap", "link",
@@ -56,6 +63,13 @@ def validate_dashboard(dash: dict[str, Any]) -> list[str]:
             errors.append(f"{name}: width {width!r} out of 1..{GRID_COLUMNS}")
         if not isinstance(height, int) or height <= 0:
             errors.append(f"{name}: height {height!r} must be positive")
+        dependency = w.get("data_dependency")
+        if dependency is not None and dependency not in VALID_DATA_DEPENDENCIES:
+            errors.append(f"{name}: invalid data_dependency {dependency!r}")
+        # A flow widget without the marker would make the validation gate fail
+        # a tenancy that simply never enabled flow logs.
+        if FLOW_RECORD_TYPE in str(w.get("query", "")) and dependency != FLOW_DEPENDENCY:
+            errors.append(f"{name}: queries {FLOW_RECORD_TYPE} but is not marked data_dependency='{FLOW_DEPENDENCY}'")
     return errors
 
 

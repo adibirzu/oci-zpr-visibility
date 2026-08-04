@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Seed cap with a real ZPR rule + supporting security attributes.
+"""Seed a demonstration target with a ZPR rule and security attributes.
 
 Creates security attributes in the default `oracle-zpr` namespace and a ZPR
 policy so `collect` returns real policy/finding inventory. Idempotent.
 
-Usage: .venv/bin/python scripts/seed_cap.py --profile cap --region eu-frankfurt-1
+Usage: .venv/bin/python scripts/seed_demo.py --profile <PROFILE> --region <REGION>
 """
 from __future__ import annotations
 
@@ -27,12 +27,15 @@ STATEMENTS = [
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--profile", default="cap")
-    p.add_argument("--region", default="eu-frankfurt-1")
+    p.add_argument("--profile", default="DEFAULT")
+    p.add_argument("--region", default=None)
     args = p.parse_args(argv)
 
     cfg = oci.config.from_file(profile_name=args.profile)
-    cfg["region"] = args.region
+    if args.region:
+        # Without --region the profile's own region stands; overwriting it with
+        # None would fail validate_config, which requires `region`.
+        cfg["region"] = args.region
     oci.config.validate_config(cfg)
     tid = cfg["tenancy"]
     sa = oci.security_attribute.SecurityAttributeClient(cfg)

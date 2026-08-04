@@ -27,14 +27,14 @@ subcommands and as thin `scripts/*.py` shims (legacy paths kept working).
 
 | Subcommand | Shim | Purpose | Key OCI calls |
 |------------|------|---------|---------------|
-| `seed` | `scripts/seed_cap.py` | Create `app` security attribute + a real ZPR policy | `SecurityAttributeClient.create_security_attribute`, `ZprClient.create_zpr_policy` |
+| `seed` | `scripts/seed_demo.py` | Create a demonstration security attribute + ZPR policy | `SecurityAttributeClient.create_security_attribute`, `ZprClient.create_zpr_policy` |
 | `trigger` | `scripts/trigger_rules.py` | Generate flows exercising every detection classification | — (local) |
 | `provision-la` | `scripts/provision_la.py` | Create LA fields/parser/source/log group; `--upload` ingests records | `LogAnalyticsClient.upsert_field/upsert_parser/upsert_source/create_log_analytics_log_group/upload_log_file` |
-| `validate-dashboards` | `scripts/validate_dashboards.py` | Execute all dashboard queries; report HIT/MISS/ERROR | `LogAnalyticsClient.query` |
-| `deploy-dashboard` | `scripts/deploy_dashboard.py` | Build + import the OCI LA Management Dashboard (21 tiles); `--dry-run` previews | `DashxApisClient.import_dashboard/list/delete` |
+| `validate-dashboards` | `scripts/validate_dashboards.py` | Parse + execute every dashboard query (per-widget DATA / ZERO_ALLOWED / NOT_APPLICABLE / ZERO / ERROR); `--expected-run-id` + `--expected-record-count` enforce the current-run freshness gate | `LogAnalyticsClient.parse_query`, `LogAnalyticsClient.query` |
+| `deploy-dashboard` | `scripts/deploy_dashboard.py` | Build + import the OCI LA Management Dashboard suite; `--dry-run` previews | `DashxApisClient.import_dashboard/list/delete` |
 
 Subcommands route before argparse so flags pass through to each module's own
-parser, e.g. `oci-zpr-visibility provision-la --profile cap --upload recs.jsonl`.
+parser, e.g. `oci-zpr-visibility provision-la --profile <PROFILE> --upload recs.jsonl`.
 
 ## 2. OCI SDK clients & operations used
 

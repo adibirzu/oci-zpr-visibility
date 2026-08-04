@@ -120,16 +120,18 @@ exact remaining LA content gap.
 
 ## Deploy the dashboard
 
-Build and import the OCI LA Management Dashboard (21 tiles) from the descriptor:
+Build and import the seven-dashboard OCI LA suite (40 tiles total) from the descriptor:
 
 ```bash
 oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --dry-run   # preview tiles
 oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION>            # import (idempotent)
-oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm all HIT
+oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm every query parses, executes, and returns expected data
 ```
 
-The dashboard appears under Log Analytics → Dashboards as "OCI ZPR Visibility".
-Re-running deletes the prior same-name dashboard and re-imports (safe to repeat).
+The suite appears under Log Analytics → Dashboards as "OCI ZPR Visibility"
+(executive posture) plus one "OCI ZPR Visibility - <view>" dashboard per
+remaining view. Re-running deletes each prior same-name dashboard and re-imports
+(safe to repeat).
 
 
 ## IAM (least privilege)
@@ -156,8 +158,9 @@ Allow any-user to {LOG_ANALYTICS_LOG_GROUP_UPLOAD_LOGS} in compartment <obs-comp
 * Run inventory collection every 15 minutes for live operations or daily for audit.
 * Keep flow logs enabled on production VCNs/subnets that host ZPR-protected resources.
 * Review HIGH and CRITICAL findings daily.
-* Treat `unexpected_accepted` as a review queue, not as proof of a ZPR bypass.
-* Treat `suspected_misconfiguration` as a connectivity triage queue where a flow was rejected even though policy correlation expected it to be allowed.
+* Treat `accepted_requires_policy_review` as a review queue, not proof of a ZPR bypass.
+* Treat `rejected_policy_expected_allow` as a connectivity triage queue, not proof that ZPR caused the rejection.
+* Check `zpr_attribution`, `correlation_confidence`, collection health, and resource coverage before drawing enforcement conclusions.
 
 ## Full ZPR enforcement demo (real protected resources + flows)
 
@@ -173,17 +176,17 @@ terraform -chdir=terraform/zpr-demo apply \
   -var "availability_domain=<AD>"
 
 # 2. Collect real protected resources (VCN + 2 instances with IPs)
-oci-zpr-visibility collect --profile cap --region eu-frankfurt-1 \
-  --snapshot out/cap/snap.json --records out/cap/recs.jsonl
-oci-zpr-visibility provision-la --profile cap --region eu-frankfurt-1 --upload out/cap/recs.jsonl
+oci-zpr-visibility collect --profile <PROFILE> --region <REGION> \
+  --snapshot out/target/snap.json --records out/target/recs.jsonl
+oci-zpr-visibility provision-la --profile <PROFILE> --region <REGION> --upload out/target/recs.jsonl
 
 # 3. After flow logs populate (~5-15 min), correlate REAL flows and upload
 FLG=$(terraform -chdir=terraform/zpr-demo output -raw flow_log_group_ocid)
 FL=$(terraform -chdir=terraform/zpr-demo output -raw flow_log_ocid)
-oci-zpr-visibility correlate --profile cap --region eu-frankfurt-1 \
-  --snapshot out/cap/snap.json --flow-log-group-id "$FLG" --flow-log-id "$FL" \
-  --output out/cap/enriched.jsonl
-oci-zpr-visibility provision-la --profile cap --region eu-frankfurt-1 --upload out/cap/enriched.jsonl
+oci-zpr-visibility correlate --profile <PROFILE> --region <REGION> \
+  --snapshot out/target/snap.json --flow-log-group-id "$FLG" --flow-log-id "$FL" \
+  --output out/target/enriched.jsonl
+oci-zpr-visibility provision-la --profile <PROFILE> --region <REGION> --upload out/target/enriched.jsonl
 
 # 4. Tear down when done (instances are billable)
 terraform -chdir=terraform/zpr-demo destroy -var "compartment_ocid=<TENANCY_OCID>" \

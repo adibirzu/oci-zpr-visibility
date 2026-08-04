@@ -38,20 +38,25 @@ locals {
       severity = "CRITICAL"
       body     = "ZPR: CRITICAL/HIGH findings detected in the latest run."
     }
-    unexpected_accepted = {
-      query    = "flows_unexpected_accepted[5m].max() > 0"
+    accepted_requires_policy_review = {
+      query    = "flows_accepted_requires_policy_review[5m].max() > 0"
       severity = "WARNING"
-      body     = "ZPR: accepted flows to protected destinations without a matching policy."
+      body     = "ZPR visibility: VCN Flow Log ACCEPT records require policy review; this is inferred evidence, not a provider enforcement verdict."
     }
-    suspected_misconfiguration = {
-      query    = "flows_suspected_misconfiguration[5m].max() > 0"
+    rejected_policy_expected_allow = {
+      query    = "flows_rejected_policy_expected_allow[5m].max() > 0"
       severity = "WARNING"
-      body     = "ZPR: flows rejected even though policy correlation expected ALLOW."
+      body     = "ZPR visibility: VCN Flow Log REJECT records overlap parsed allow intent and require review; this is inferred evidence."
     }
     missing_heartbeat = {
       query    = "heartbeat[1h].count() < 1"
       severity = "CRITICAL"
       body     = "ZPR: visibility refresh heartbeat missing for 1h (collector may be down)."
+    }
+    collection_errors = {
+      query    = "collection_errors[5m].max() > 0"
+      severity = "WARNING"
+      body     = "ZPR: one or more inventory collection operations failed; review the collection-health dashboard."
     }
   } : {}
 }

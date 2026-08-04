@@ -11,7 +11,7 @@ hosting the ZPR-protected resources, via terraform flow_log_targets). This
 script is the offline trigger for validating detections end to end.
 
 Usage:
-  .venv/bin/python scripts/trigger_rules.py --out out/cap/trigger_records.jsonl
+  .venv/bin/python scripts/trigger_rules.py --out out/demo/trigger_records.jsonl
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ FLOWS = [
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--out", default="out/cap/trigger_records.jsonl")
+    p.add_argument("--out", default="out/demo/trigger_records.jsonl")
     args = p.parse_args(argv)
 
     # Stamp records with the current time so they fall inside recent dashboard

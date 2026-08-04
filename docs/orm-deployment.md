@@ -16,7 +16,7 @@ Resource Manager stack, and apply.
 | `functions.tf` | optional OCI Functions application + function resource + resource-principal IAM for `deployment_mode = "function"` |
 
 In `controller_vm` mode, after apply the controller (no API keys) builds the LA
-custom source + 40 fields + JSON parser, imports the 29-widget dashboard,
+custom source + fields + JSON parser, imports the dashboard suite,
 ingests inventory + findings + drift, publishes Monitoring metrics, and
 installs a 15-minute refresh cron with VCN Flow Log correlation — so the
 dashboard is **live with real data, no manual step**. In `function` mode, the
