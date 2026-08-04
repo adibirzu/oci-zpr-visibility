@@ -81,6 +81,22 @@ class DashboardSchemaTests(unittest.TestCase):
         self.assertIn("zpr_attribution", by_name["Rejected protected destinations"]["query"])
         self.assertEqual(by_name["Flow path link (src to dst)"]["visualization_type"], "link")
 
+    def test_flow_decision_tables_carry_enforcement_honesty_qualifiers(self):
+        # zpr_attribution is always INFERRED_NOT_PROVIDER_VERDICT: ZPR emits no
+        # decision log, so an allow/reject row is inferred from VCN flow logs.
+        # Every per-flow table must show that qualifier next to the decision,
+        # otherwise a reader takes the row as a ZPR enforcement verdict.
+        for w in dashboard.iter_widgets(self.dash):
+            if w.get("visualization_type") != "table":
+                continue
+            q = w["query"]
+            if "record_type = 'zpr_enriched_flow'" not in q:
+                continue
+            self.assertIn("zpr_attribution", q, f"{w['name']} omits zpr_attribution")
+            self.assertIn(
+                "correlation_confidence", q, f"{w['name']} omits correlation_confidence"
+            )
+
     def test_customer_queries_use_review_classification_for_inferred_flows(self):
         for name in (
             "KPI: Accepted for policy review",
