@@ -78,7 +78,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pinned build tools
-        run: python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
+        run: "python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock"
       - name: Resolve the locked Linux runtime wheelhouse
         run: |
           mkdir -m 700 "$RUNNER_TEMP/zpr-wheelhouse"
