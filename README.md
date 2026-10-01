@@ -57,7 +57,7 @@ Primary Oracle references:
 | Doc | What it covers |
 |-----|----------------|
 | [docs/zpr-overview.md](docs/zpr-overview.md) | **What ZPR is and why it matters** — the case for attribute-based zero-trust routing |
-| [docs/log-format.md](docs/log-format.md) | The ingested JSON record schema (5 record types + fields) and how to view it |
+| [docs/log-format.md](docs/log-format.md) | The ingested JSON record schema (8 record types + fields) and how to view it |
 | [docs/dashboards-and-data-guide.md](docs/dashboards-and-data-guide.md) | **How dashboard data is collected and used**, evidence limits, current views, and researched next-version dashboard direction |
 | [docs/detections.md](docs/detections.md) | ZPR detection rules (labels), conditions, and how to promote them to alerts |
 | [docs/architecture.md](docs/architecture.md) | End-to-end design, ingestion paths, collector internals, detection logic, IAM |
