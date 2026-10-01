@@ -35,7 +35,10 @@ def fixture_root(tmp_path, module):
             # rely on a local build having run before the test suite.
             collector_builder().build_archive(ROOT, target)
         else:
-            shutil.copyfile(ROOT / "orm" / name, target)
+            # Runtime dependencies are maintained at the repository root and
+            # copied into the ORM archive by the packaging script.
+            source = ROOT / name if name == "requirements-runtime.lock" else ROOT / "orm" / name
+            shutil.copyfile(source, target)
     return root
 
 
