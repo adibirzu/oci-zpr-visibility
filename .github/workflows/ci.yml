@@ -9,7 +9,7 @@ on:
 jobs:
   python:
     name: Python tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -47,7 +47,7 @@ jobs:
 
   terraform:
     name: Terraform validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         root: [terraform, terraform/zpr-demo, orm]
@@ -71,7 +71,7 @@ jobs:
 
   image-bundle:
     name: Marketplace image payload admission
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -120,7 +120,7 @@ jobs:
             -var 'subnet_ocid=ocid1.subnet.oc1..example' \
             -var 'image_name=zpr-visibility-candidate' \
             -var "bundle_path=$RUNNER_TEMP/zpr-image-bundle" image/zpr.pkr.hcl
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: zpr-marketplace-image-payload
           path: ${{ runner.temp }}/zpr-image-bundle/
