@@ -14,10 +14,10 @@ resource "oci_core_vcn" "lab" {
   depends_on    = [time_sleep.zpr_attr_propagation]
 }
 
-resource "oci_core_internet_gateway" "igw" {
+resource "oci_core_nat_gateway" "controller" {
   compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.lab.id
-  display_name   = "${local.name_prefix}-igw"
+  display_name   = "${local.name_prefix}-nat"
 }
 
 resource "oci_core_route_table" "public" {
@@ -26,7 +26,38 @@ resource "oci_core_route_table" "public" {
   display_name   = "${local.name_prefix}-rt-public"
   route_rules {
     destination       = "0.0.0.0/0"
-    network_entity_id = oci_core_internet_gateway.igw.id
+    network_entity_id = oci_core_nat_gateway.controller.id
+  }
+}
+
+# Private endpoints need access to Oracle services (including Oracle Cloud
+# Agent) without receiving public IPs or a route to the public Internet.
+data "oci_core_services" "oracle_services" {
+  filter {
+    name   = "name"
+    values = ["All .* Services In Oracle Services Network"]
+    regex  = true
+  }
+}
+
+resource "oci_core_service_gateway" "endpoints" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.lab.id
+  display_name   = "${local.name_prefix}-endpoints-sgw"
+
+  services {
+    service_id = data.oci_core_services.oracle_services.services[0].id
+  }
+}
+
+resource "oci_core_route_table" "endpoints" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.lab.id
+  display_name   = "${local.name_prefix}-rt-endpoints"
+  route_rules {
+    destination       = data.oci_core_services.oracle_services.services[0].cidr_block
+    destination_type  = "SERVICE_CIDR_BLOCK"
+    network_entity_id = oci_core_service_gateway.endpoints.id
   }
 }
 
@@ -52,17 +83,18 @@ resource "oci_core_subnet" "endpoints" {
   dns_label                  = "endpoints"
   prohibit_public_ip_on_vnic = true
   security_list_ids          = [oci_core_security_list.lab.id]
-  route_table_id             = oci_core_vcn.lab.default_route_table_id
+  route_table_id             = oci_core_route_table.endpoints.id
 }
 
 resource "oci_core_subnet" "controller" {
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.lab.id
-  cidr_block        = "10.20.2.0/24"
-  display_name      = "${local.name_prefix}-controller"
-  dns_label         = "controller"
-  security_list_ids = [oci_core_security_list.lab.id]
-  route_table_id    = oci_core_route_table.public.id
+  prohibit_public_ip_on_vnic = true
+  compartment_id             = var.compartment_ocid
+  vcn_id                     = oci_core_vcn.lab.id
+  cidr_block                 = "10.20.2.0/24"
+  display_name               = "${local.name_prefix}-controller"
+  dns_label                  = "controller"
+  security_list_ids          = [oci_core_security_list.lab.id]
+  route_table_id             = oci_core_route_table.public.id
 }
 
 resource "oci_logging_log_group" "flow" {

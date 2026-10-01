@@ -1,41 +1,135 @@
 #!/bin/bash
-set -x
+set -euo pipefail
 exec > /var/log/zpr-controller.log 2>&1
-dnf install -y python3.11 python3.11-pip || yum install -y python311 python311-pip
-PIP=$(command -v pip3.11 || command -v pip3)
-$PIP install --upgrade pip oci
+umask 077
+install -d -m 0750 /etc/zpr-visibility /var/lib/zpr-visibility /opt/zpr-visibility
+printf '%s' '${runtime_config}' | base64 -d >/etc/zpr-visibility/config.json
+printf '%s' '${runtime_lock}' | base64 -d >/etc/zpr-visibility/requirements.lock
+cat >/usr/local/sbin/zpr-status <<'STATUS'
+#!/bin/bash
+set -euo pipefail
+if [ -f /var/lib/zpr-visibility/status.json ]; then
+  cat /var/lib/zpr-visibility/status.json
+else
+  echo '{"ready":false}'
+fi
+STATUS
+cat >/usr/local/sbin/zpr-cleanup <<'CLEANUP'
+#!/bin/bash
+set -euo pipefail
+systemctl disable --now zpr-bootstrap.timer zpr-refresh.timer
+systemctl stop zpr-bootstrap.service zpr-refresh.service
+export OCI_ZPR_DASHBOARD_PATH=/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+exec /usr/bin/flock -n /run/zpr-visibility-refresh.lock /opt/zpr-visibility/venv/bin/python -m oci_zpr_visibility.cleanup --execute
+CLEANUP
+chmod 0750 /usr/local/sbin/zpr-status /usr/local/sbin/zpr-cleanup
+printf '%s\n' 'ocarun ALL=(root) NOPASSWD: /usr/local/sbin/zpr-status, /usr/local/sbin/zpr-cleanup' >/etc/sudoers.d/zpr-lifecycle
+chmod 0440 /etc/sudoers.d/zpr-lifecycle
+visudo -cf /etc/sudoers.d/zpr-lifecycle
 
-# Download the collector package via instance principal (retry until IAM propagates).
-python3.11 - <<'PY'
-import oci, time, sys
+# Install recovery supervision BEFORE network, IAM, package or LA operations.
+cat >/usr/local/sbin/zpr-bootstrap <<'BOOTSTRAP'
+#!/bin/bash
+set -euo pipefail
+umask 077
+exec 9>/run/zpr-visibility-refresh.lock
+/usr/bin/flock -n 9
+dnf install -y python3.11 python3.11-pip
+if [ ! -x /opt/zpr-visibility/venv/bin/python ]; then
+  python3.11 -m venv /opt/zpr-visibility/venv
+fi
+/opt/zpr-visibility/venv/bin/pip install --require-hashes --only-binary=:all: -r /etc/zpr-visibility/requirements.lock
+/opt/zpr-visibility/venv/bin/python - <<'PY'
+import hashlib
+from pathlib import Path
+import oci
 signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
 osc = oci.object_storage.ObjectStorageClient({}, signer=signer)
-for attempt in range(40):
-    try:
-        ns = osc.get_namespace().data
-        obj = osc.get_object(ns, "${pkg_bucket}", "${pkg_object}")
-        open("/tmp/pkg.tgz", "wb").write(obj.data.content)
-        print("downloaded package"); sys.exit(0)
-    except Exception as e:
-        print("waiting for instance principal/policy:", str(e)[:120]); time.sleep(20)
-sys.exit(1)
+ns = osc.get_namespace().data
+obj = osc.get_object(ns, "${pkg_bucket}", "${pkg_object}")
+payload = obj.data.content
+if hashlib.sha256(payload).hexdigest() != "${package_sha256}":
+    raise RuntimeError("collector package checksum mismatch")
+Path("/opt/zpr-visibility/pkg.tgz").write_bytes(payload)
 PY
+install -d -m 0750 /opt/zpr-visibility/package
+tar xzf /opt/zpr-visibility/pkg.tgz -C /opt/zpr-visibility/package
+/opt/zpr-visibility/venv/bin/pip install --no-deps --no-build-isolation /opt/zpr-visibility/package
+export OCI_ZPR_DASHBOARD_PATH=/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+/opt/zpr-visibility/venv/bin/python -m oci_zpr_visibility.controller_runtime bootstrap
+touch /var/lib/zpr-visibility/initial-refresh-succeeded
+systemctl enable --now zpr-refresh.timer
+BOOTSTRAP
+chmod 0750 /usr/local/sbin/zpr-bootstrap
 
-mkdir -p /tmp/pkg && tar xzf /tmp/pkg.tgz -C /tmp/pkg
-$PIP install /tmp/pkg
-BIN=$(command -v oci-zpr-visibility || echo /usr/local/bin/oci-zpr-visibility)
-# log_analytics/ isn't packaged; point the dashboard builder at the extracted copy.
-export OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+cat >/usr/local/sbin/zpr-refresh <<'REFRESH'
+#!/bin/bash
+set -euo pipefail
+export OCI_ZPR_DASHBOARD_PATH=/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+exec /usr/bin/flock -n /run/zpr-visibility-refresh.lock /opt/zpr-visibility/venv/bin/python -m oci_zpr_visibility.controller_runtime refresh
+REFRESH
+chmod 0750 /usr/local/sbin/zpr-refresh
+cat >/etc/systemd/system/zpr-bootstrap.service <<'SERVICE'
+[Unit]
+Description=Provision and verify OCI ZPR Visibility
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/zpr-visibility/initial-refresh-succeeded
+StartLimitIntervalSec=1800
+StartLimitBurst=3
 
-# Provision LA content, deploy the dashboard, and run the first refresh — all via
-# instance principal (no API keys on the box).
-$BIN provision-la --auth instance_principal --region ${region} --log-group-name ${log_group_name}
-$BIN deploy-dashboard --auth instance_principal --region ${region}
-$BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} || true
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/zpr-bootstrap
+Restart=on-failure
+RestartSec=60
+TimeoutStartSec=15min
+UMask=0077
+SERVICE
+cat >/etc/systemd/system/zpr-bootstrap.timer <<'TIMER'
+[Unit]
+Description=Retry incomplete OCI ZPR Visibility bootstrap
 
-# Keep refreshing every 15 minutes via cron (with flow correlation for traffic KPIs).
-cat >/etc/cron.d/zpr-refresh <<CRON
-OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
-*/15 * * * * root $BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} >> /var/log/zpr-refresh.log 2>&1
-CRON
-echo "ZPR controller bootstrap complete"
+[Timer]
+OnBootSec=30s
+OnCalendar=hourly
+Persistent=true
+Unit=zpr-bootstrap.service
+
+[Install]
+WantedBy=timers.target
+TIMER
+cat >/etc/systemd/system/zpr-refresh.service <<'SERVICE'
+[Unit]
+Description=OCI ZPR Visibility refresh and indexing verification
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/var/lib/zpr-visibility/initial-refresh-succeeded
+StartLimitIntervalSec=900
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/zpr-refresh
+Restart=on-failure
+RestartSec=60
+TimeoutStartSec=10min
+UMask=0077
+SERVICE
+cat >/etc/systemd/system/zpr-refresh.timer <<'TIMER'
+[Unit]
+Description=Run OCI ZPR Visibility refresh every 15 minutes
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=15min
+Persistent=true
+Unit=zpr-refresh.service
+
+[Install]
+WantedBy=timers.target
+TIMER
+systemctl daemon-reload
+systemctl enable --now zpr-bootstrap.timer
+systemctl start --no-block zpr-bootstrap.service
+echo "ZPR bootstrap supervision installed; readiness remains pending"

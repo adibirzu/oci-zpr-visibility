@@ -69,7 +69,7 @@
         },
         {
           "name": "Active ZPR policies",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats latest(policy_lifecycle_state) as current_policy_lifecycle_state by policy_id | where current_policy_lifecycle_state = 'ACTIVE' | stats count as active_policies",
           "visualization_type": "bar",
           "layout": {
             "width": 3,
@@ -507,7 +507,7 @@
         {
           "name": "Collection gaps",
           "allow_zero": true,
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, collection_operation, resource_type, error_category, occurrence_count, recommendation, run_id",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, Operation, resource_type, Category, occurrence_count, recommendation, run_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,

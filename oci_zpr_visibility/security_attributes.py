@@ -58,12 +58,14 @@ def attribute_matches_reference(attributes: dict[str, str], reference: str) -> b
         left, value = normalized.rsplit(":", 1)
         if attributes.get(left) == value:
             return True
-        # Match when the reference omits the namespace (e.g. policy "app:web")
-        # but the resource attribute key is namespace-qualified ("oracle-zpr.app"):
-        # compare the local key segment, or the leading namespace segment.
-        return any(
-            (k == left or k.rsplit(".", 1)[-1] == left or k.split(".", 1)[0] == left) and v == value
-            for k, v in attributes.items()
-        )
+        # An unqualified reference may match a local attribute name or a
+        # namespace prefix, but it must resolve to exactly one namespaced key.
+        # Otherwise a policy could be attributed to the wrong namespace.
+        candidates = [
+            key for key, candidate_value in attributes.items()
+            if candidate_value == value
+            and (key.rsplit(".", 1)[-1] == left or key.split(".", 1)[0] == left)
+        ]
+        return len(candidates) == 1
 
     return normalized in attributes or normalized in attributes.values()

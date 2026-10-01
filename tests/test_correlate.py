@@ -120,6 +120,31 @@ class CorrelateTests(unittest.TestCase):
         self.assertTrue(record["matched_expected_policy"])
         self.assertEqual(record["review_classification"], "policy_consistent_accept")
 
+    def test_duplicate_ip_across_vcns_is_inconclusive_without_flow_context(self):
+        snapshot = {
+            "snapshot_time": "2026-06-03T10:00:00Z",
+            "ip_resource_map": [
+                {"private_ip": "10.0.1.10", "resource_id": "web-a", "vcn_id": "vcn-a",
+                 "normalized_security_attributes": {"apps.role": "web"}},
+                {"private_ip": "10.0.1.10", "resource_id": "web-b", "vcn_id": "vcn-b",
+                 "normalized_security_attributes": {"apps.role": "web"}},
+                {"private_ip": "10.0.2.20", "resource_id": "db", "vcn_id": "vcn-a",
+                 "normalized_security_attributes": {"apps.role": "db"}},
+            ],
+        }
+        policies = policy_statement_records({
+            "id": "p1", "lifecycle_state": "ACTIVE",
+            "statements": ["allow apps:web endpoints to connect to apps:db endpoints"],
+        }, snapshot["snapshot_time"])
+
+        record = correlate_flow_records([{"data": {
+            "sourceAddress": "10.0.1.10", "destinationAddress": "10.0.2.20", "action": "ACCEPT"
+        }}], snapshot, policies)[0]
+
+        self.assertIsNone(record["source_resource_id"])
+        self.assertEqual(record["correlation_reason"], "ambiguous_source_address")
+        self.assertEqual(record["review_classification"], "needs_enrichment")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,16 +53,16 @@ def _say(message: str = "") -> None:
 # JSON key -> display name (display name is what dashboard queries reference).
 # Display name is kept identical to the JSON key so queries use bare tokens.
 FIELD_TOKENS = [
-    "schema_version", "run_id", "event_time", "inventory_snapshot_time",
+    "schema_version", "run_id", "installation_id", "scope_id", "event_time", "inventory_snapshot_time",
     "record_type", "policy_id", "policy_name", "policy_lifecycle_state",
     "statement", "statement_hash", "statement_index", "action", "source_attribute",
-    "destination_attribute", "network_scope", "target_type", "parser_confidence",
+    "destination_attribute", "network_scope", "source_vcn_scope", "destination_vcn_scope", "target_type", "parser_confidence",
     "resource_id", "resource_name", "resource_type", "compartment_id", "region",
     "vcn_id", "subnet_id", "vnic_id", "private_ip", "security_attributes",
     "severity", "finding_type", "cidr", "recommendation", "attribute_reference",
     "classification", "source_ip", "destination_ip", "destination_port",
     "review_classification", "evidence_source", "zpr_attribution",
-    "correlation_confidence", "correlation_reason", "matched_policy_id",
+    "correlation_version", "correlation_confidence", "correlation_reason", "matched_policy_id",
     "matched_policy_name", "has_unmodeled_policy_filters",
     "source_type", "destination_type", "source_cidrs", "destination_cidrs",
     "source_ips", "destination_ips",
@@ -81,6 +81,11 @@ FIELD_TOKENS = [
     "collection_service", "collection_operation", "error_category", "occurrence_count",
 ]
 
+# Reuse native fields rather than consume scarce custom STRING slots. These
+# mappings are source-specific; the JSON record schema remains unchanged.
+FIELD_DISPLAY_NAMES = {"collection_operation": "Operation", "error_category": "Category"}
+FIELD_DATA_TYPES = {"occurrence_count": "LONG"}
+
 SAMPLE_CONTENT = (
     '{"record_type":"zpr_finding","event_time":"2026-06-03T10:00:00Z",'
     '"severity":"CRITICAL","finding_type":"broad_cidr_exception",'
@@ -96,7 +101,7 @@ def _client(auth: str, config_file: str | None, profile: str, region: str):
     return session, la, ns
 
 
-def ensure_fields(la, ns) -> dict[str, str]:
+def ensure_fields(la, ns, journal=None) -> dict[str, str]:
     """Return {token: internal_name} for every token.
 
     Reuse any existing field whose display name matches case-insensitively
@@ -115,17 +120,25 @@ def ensure_fields(la, ns) -> dict[str, str]:
     mapping: dict[str, str] = {}
     created_n = reused_n = 0
     for token in FIELD_TOKENS:
-        key = token.lower()
+        key = FIELD_DISPLAY_NAMES.get(token, token).lower()
         if key in by_lower:
             mapping[token] = by_lower[key]
+            if journal:
+                journal.record("field", token, by_lower[key], created=False)
             reused_n += 1
             continue
+        if token in FIELD_DISPLAY_NAMES:
+            raise RuntimeError(f"required native Log Analytics field unavailable: {FIELD_DISPLAY_NAMES[token]}")
         details = m.UpsertLogAnalyticsFieldDetails(
-            display_name=token, data_type="STRING",
+            display_name=token, data_type=FIELD_DATA_TYPES.get(token, "STRING"),
             description=f"OCI ZPR visibility field: {token}",
         )
         created = la.upsert_field(namespace_name=ns, upsert_log_analytics_field_details=details).data
         mapping[token] = created.name
+        if journal:
+            # Fields are tenancy-shared even when created here; cleanup
+            # preserves them because other parsers may adopt them later.
+            journal.record("field", token, created.name, created=True)
         by_lower[key] = created.name
         created_n += 1
         _say(f"  field created: {token} -> {created.name}")
@@ -133,7 +146,10 @@ def ensure_fields(la, ns) -> dict[str, str]:
     return mapping
 
 
-def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
+def ensure_parser(la, ns, field_map: dict[str, str], *, parser_name=None,
+                  display_name=None, journal=None) -> str:
+    parser_name = parser_name or PARSER_NAME
+    display_name = display_name or PARSER_DISPLAY_NAME
     m = oci.log_analytics.models
     maps = []
     seq = 1
@@ -161,8 +177,8 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
     # is_default are required for a clean upsert. Field maps reference the field by
     # internal name only.
     details = m.UpsertLogAnalyticsParserDetails(
-        name=PARSER_NAME, display_name=PARSER_DISPLAY_NAME,
-        description="Parses OCI ZPR visibility JSON records.",
+        name=parser_name, display_name=display_name,
+        description=f"ZPR visibility installation={journal.installation}" if journal else "Parses OCI ZPR visibility JSON records.",
         type="JSON", language="en_US", encoding="UTF-8", is_default=True,
         is_single_line_content=False, is_system=False, header_content="$:0",
         content=SAMPLE_CONTENT, example_content=SAMPLE_CONTENT,
@@ -170,39 +186,50 @@ def ensure_parser(la, ns, field_map: dict[str, str]) -> str:
     )
     etag = None
     try:
-        etag = la.get_parser(namespace_name=ns, parser_name=PARSER_NAME).headers.get("etag")
-    except oci.exceptions.ServiceError:
-        pass
+        existing = la.get_parser(namespace_name=ns, parser_name=parser_name)
+        etag = existing.headers["etag"]
+        if journal and (not journal.get("parser", parser_name) or
+            existing.data.description != details.description):
+            raise ValueError("foreign parser collision")
+    except oci.exceptions.ServiceError as exc:
+        if exc.status != 404:
+            raise
+    if journal:
+        journal.record("parser", parser_name, parser_name, created=True)
     kwargs = {"if_match": etag} if etag else {}
     la.upsert_parser(namespace_name=ns, upsert_log_analytics_parser_details=details, **kwargs)
-    _say(f"parser ready: {PARSER_NAME} ({len(maps)} field maps)")
-    return PARSER_NAME
+    _say(f"parser ready: {parser_name} ({len(maps)} field maps)")
+    return parser_name
 
 
-def _find_source(la, ns, tenancy_id):
+def _find_source(la, ns, compartment_id, source_name=SOURCE_NAME, display_name=SOURCE_DISPLAY_NAME):
     """Return an existing source matching our display/internal name, else None."""
     page = None
     while True:
         kwargs = {"limit": 1000, "is_system": "ALL"}
         if page:
             kwargs["page"] = page
-        resp = la.list_sources(namespace_name=ns, compartment_id=tenancy_id, **kwargs)
+        resp = la.list_sources(namespace_name=ns, compartment_id=compartment_id, **kwargs)
         for src in resp.data.items:
-            if src.name in (SOURCE_NAME, SOURCE_DISPLAY_NAME) or src.display_name == SOURCE_DISPLAY_NAME:
+            if src.name in (source_name, display_name) or src.display_name == display_name:
                 return src
         page = resp.headers.get("opc-next-page")
         if not page:
             return None
 
 
-def ensure_source(la, ns, tenancy_id, parser_name: str) -> str:
+def ensure_source(la, ns, compartment_id, parser_name: str, *, source_name=SOURCE_NAME,
+                  display_name=SOURCE_DISPLAY_NAME, journal=None) -> str:
     m = oci.log_analytics.models
-    existing = _find_source(la, ns, tenancy_id)
-    internal_name = existing.name if existing else SOURCE_NAME
-    display_name = existing.display_name if existing else SOURCE_DISPLAY_NAME
+    existing = _find_source(la, ns, compartment_id, source_name, display_name)
+    internal_name = existing.name if existing else source_name
+    description = f"ZPR visibility installation={journal.installation}" if journal else "OCI ZPR policy, resource, finding, and enriched flow records."
+    if existing and journal and (not journal.get("source", source_name) or
+        existing.description != description):
+        raise ValueError("foreign source collision")
     details = m.UpsertLogAnalyticsSourceDetails(
         name=internal_name, display_name=display_name,
-        description="OCI ZPR policy, resource, finding, and enriched flow records.",
+        description=description,
         type_name="os_file", is_for_cloud=False, is_system=False,
         parsers=[m.LogAnalyticsParser(name=parser_name, display_name=PARSER_DISPLAY_NAME,
                                       type="JSON", is_default=True)],
@@ -211,38 +238,49 @@ def ensure_source(la, ns, tenancy_id, parser_name: str) -> str:
     )
     etag = None
     if existing:
-        try:
-            etag = la.get_source(namespace_name=ns, source_name=internal_name,
-                                 compartment_id=tenancy_id).headers.get("etag")
-        except oci.exceptions.ServiceError:
-            pass
+        etag = la.get_source(namespace_name=ns, source_name=internal_name,
+                             compartment_id=compartment_id).headers["etag"]
+    if journal:
+        journal.record("source", source_name, existing.name if existing else None, created=True)
     kwargs = {"if_match": etag} if etag else {}
-    la.upsert_source(namespace_name=ns, upsert_log_analytics_source_details=details, **kwargs)
+    response = la.upsert_source(namespace_name=ns, upsert_log_analytics_source_details=details, **kwargs)
+    if journal:
+        journal.record("source", source_name, response.data.name, created=True)
     _say(f"source {'updated' if existing else 'ready'}: {display_name}")
     return display_name
 
 
-def ensure_log_group(la, ns, tenancy_id, name: str) -> str:
+def ensure_log_group(la, ns, compartment_id, name: str, journal=None) -> str:
     m = oci.log_analytics.models
     for lg in oci.pagination.list_call_get_all_results(
         la.list_log_analytics_log_groups, namespace_name=ns,
-        compartment_id=tenancy_id, limit=200
+        compartment_id=compartment_id, limit=200
     ).data:
         if lg.display_name == name:
+            if journal:
+                entry = journal.get("log_group", name)
+                if not entry or (lg.freeform_tags or {}).get("zpr-installation") != journal.installation:
+                    raise ValueError("foreign log group collision")
+                journal.record("log_group", name, lg.id, created=True)
             _say(f"log group exists: {name}")
             return lg.id
+    if journal:
+        journal.record("log_group", name, None, created=True)
     created = la.create_log_analytics_log_group(
         namespace_name=ns,
         create_log_analytics_log_group_details=m.CreateLogAnalyticsLogGroupDetails(
-            compartment_id=tenancy_id, display_name=name,
+            compartment_id=compartment_id, display_name=name,
             description="ZPR visibility ingestion target",
+            freeform_tags={"zpr-installation": journal.installation} if journal else None,
         ),
     ).data
+    if journal:
+        journal.record("log_group", name, created.id, created=True)
     _say(f"log group created: {name}")
     return created.id
 
 
-def upload_records(la, ns, log_group_id: str, records_path: str) -> int:
+def upload_records(la, ns, log_group_id: str, records_path: str, source_name=SOURCE_DISPLAY_NAME) -> int:
     """Ingest a JSONL records file into LA via the Upload API under the source."""
     import io
     body = io.BytesIO(Path(records_path).read_bytes())
@@ -250,7 +288,7 @@ def upload_records(la, ns, log_group_id: str, records_path: str) -> int:
     resp = la.upload_log_file(
         namespace_name=ns,
         upload_name=f"zpr-visibility-{name}",
-        log_source_name=SOURCE_DISPLAY_NAME,
+        log_source_name=source_name,
         filename=name,
         opc_meta_loggrpid=log_group_id,
         upload_log_file_body=body,
@@ -268,19 +306,43 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config-file", default=None)
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--region", default=None)
+    p.add_argument("--compartment-id", default=None,
+                   help="Compartment that owns the Log Analytics source and log group; defaults to tenancy root for compatibility.")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--upload", help="JSONL records file to ingest into LA after provisioning")
     p.add_argument("--quiet", action="store_true", help="suppress identifiers and provisioning details")
+    p.add_argument("--installation-id")
+    p.add_argument("--state-bucket")
+    p.add_argument("--upload-only", action="store_true")
     args = p.parse_args(argv)
     _QUIET = args.quiet
 
     session, la, ns = _client(args.auth, args.config_file, args.profile, args.region)
-    tenancy_id = session.tenancy_id
+    target_compartment_id = args.compartment_id or session.tenancy_id
     _say("Log Analytics namespace resolved")
-    field_map = ensure_fields(la, ns)
-    lg_id = ensure_log_group(la, ns, tenancy_id, args.log_group_name)
-    parser_name = ensure_parser(la, ns, field_map)
-    source_name = ensure_source(la, ns, tenancy_id, parser_name)
+    journal = None
+    if args.installation_id:
+        from .ownership import Ownership
+        if not args.state_bucket or not args.compartment_id:
+            raise ValueError("owned provisioning requires state bucket and compartment")
+        journal = Ownership(session, args.state_bucket, args.installation_id, target_compartment_id)
+    source_display = owned_source_name(args.installation_id) if journal else SOURCE_DISPLAY_NAME
+    if args.upload_only:
+        if not journal or not args.upload:
+            raise ValueError("upload-only requires an owned installation and upload file")
+        entry = journal.get("log_group", args.log_group_name)
+        if not entry or not entry["identity"] or entry["deleted"]:
+            raise ValueError("owned ingestion group unavailable")
+        return upload_records(la, ns, entry["identity"], args.upload, source_display)
+    field_map = ensure_fields(la, ns, journal)
+    lg_id = ensure_log_group(la, ns, target_compartment_id, args.log_group_name, journal)
+    suffix = args.installation_id.replace("-", "_") if journal else None
+    parser_name = ensure_parser(la, ns, field_map,
+        parser_name=f"zpr_{suffix}_parser" if journal else None,
+        display_name=f"{PARSER_DISPLAY_NAME} [{args.installation_id}]" if journal else None, journal=journal)
+    source_name = ensure_source(la, ns, target_compartment_id, parser_name,
+        source_name=f"zpr_{suffix}_source" if journal else SOURCE_NAME,
+        display_name=source_display, journal=journal)
 
     _say("\nProvisioned:")
     _say(f"  fields     = {len(field_map)} ready")
@@ -290,8 +352,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.upload:
         _say()
-        upload_records(la, ns, lg_id, args.upload)
+        upload_records(la, ns, lg_id, args.upload, source_display)
     return 0
+
+
+def owned_source_name(installation):
+    from .ownership import validate_installation
+    return f"{SOURCE_DISPLAY_NAME} [{validate_installation(installation)}]"
 
 
 if __name__ == "__main__":

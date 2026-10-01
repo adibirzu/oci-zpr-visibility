@@ -3,7 +3,8 @@
 
 Builds an OCI Management Dashboard with embedded saved searches from the
 enriched dashboard descriptor (oci_zpr_visibility/dashboard.py) and imports it
-idempotently via DashxApisClient.import_dashboard. `--dry-run` prints the plan.
+via DashxApisClient.import_dashboard. Existing same-name dashboards block import
+until an explicit owned-ID migration is available. `--dry-run` prints the plan.
 
 Usage:
   oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> [--dry-run]
@@ -11,6 +12,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
+import json
 import re
 import sys
 
@@ -197,6 +201,124 @@ def build_management_dashboards(dash: dict, compartment_id: str) -> list[dict]:
     return built
 
 
+def import_new_dashboard_suite(md, built: list[dict], compartment_id: str):
+    """Create only after complete discovery; names never authorize deletion.
+
+    This deliberately refuses reruns against existing content. Exact-ID owned
+    updates and cleanup require a separately verified ownership manifest.
+    """
+    names = {item["displayName"] for item in built}
+    page = None
+    seen = set()
+    while True:
+        kwargs = {"compartment_id": compartment_id}
+        if page:
+            kwargs["page"] = page
+        response = md.list_management_dashboards(**kwargs)
+        if any(item.display_name in names for item in response.data.items):
+            raise ValueError("existing dashboard name conflicts; explicit owned-ID migration required")
+        page = response.headers.get("opc-next-page")
+        if not page:
+            break
+        if page in seen:
+            raise ValueError("dashboard inventory pagination did not progress")
+        seen.add(page)
+    details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=built)
+    return md.import_dashboard(details)
+
+
+def dashboard_inventory(md, compartment):
+    items, page, seen = [], None, set()
+    while True:
+        response = md.list_management_dashboards(compartment_id=compartment,
+            **({"page": page} if page else {}))
+        items.extend(response.data.items)
+        page = response.headers.get("opc-next-page")
+        if not page:
+            return items
+        if page in seen:
+            raise ValueError("dashboard inventory pagination did not progress")
+        seen.add(page)
+
+
+def reconcile_owned_dashboards(md, built, compartment, journal, *, inventory=None):
+    """Import/update exact owned IDs; journal intent precedes creation.
+
+    Foreign collisions block the entire suite. A timed-out import can be
+    reconciled only using both persisted creation intent and installation tags.
+    Never delete an old dashboard to perform an upgrade.
+    """
+    inventory = inventory or (lambda: dashboard_inventory(md, compartment))
+    found = inventory()
+    plans = []
+    for original in built:
+        item = copy.deepcopy(original)
+        name = item["displayName"]
+        entry = journal.get("dashboard", name)
+        matches = [d for d in found if d.display_name == name]
+        if len(matches) > 1:
+            raise ValueError("ambiguous dashboard inventory")
+        existing = matches[0] if matches else None
+        if existing and (not entry or not entry["created"] or
+            existing.compartment_id != compartment or
+            (existing.freeform_tags or {}).get("zpr-installation") != journal.installation or
+            entry["identity"] not in (None, existing.dashboard_id)):
+            raise ValueError("foreign dashboard collision")
+        if entry and entry["identity"] and not existing:
+            raise ValueError("owned dashboard missing; explicit recovery required")
+        revision = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
+        item["freeformTags"] = {**item.get("freeformTags", {}),
+            "zpr-installation": journal.installation, "zpr-revision": revision}
+        # Search IDs must not collide across installations or logical views.
+        search_map = {}
+        for search in item.get("savedSearches", []):
+            previous = search["id"]
+            search["id"] = f"{journal.installation}-{_slug(name)}-{previous}"
+            search["freeformTags"] = {**search.get("freeformTags", {}),
+                                      "zpr-installation": journal.installation}
+            search_map[previous] = search["id"]
+        for tile in item.get("tiles", []):
+            tile["savedSearchId"] = search_map[tile["savedSearchId"]]
+        etag = None
+        if existing:
+            response = md.get_management_dashboard(existing.dashboard_id)
+            actual = response.data
+            if actual.compartment_id != compartment or (actual.freeform_tags or {}).get("zpr-installation") != journal.installation:
+                raise ValueError("dashboard ownership changed")
+            etag = response.headers["etag"]
+            item["dashboardId"] = existing.dashboard_id
+        else:
+            item["dashboardId"] = f"{journal.installation}-{_slug(name)}"
+        plans.append((item, existing, etag, revision))
+    for item, existing, etag, revision in plans:
+        name = item["displayName"]
+        if existing:
+            journal.record("dashboard", name, existing.dashboard_id, created=True,
+                           revision=(existing.freeform_tags or {}).get("zpr-revision"))
+            if (existing.freeform_tags or {}).get("zpr-revision") == revision:
+                searches = getattr(md.get_management_dashboard(existing.dashboard_id).data, "saved_searches", None) or []
+                for search in searches:
+                    if search.compartment_id != compartment or (search.freeform_tags or {}).get("zpr-installation") != journal.installation:
+                        raise ValueError("saved search ownership missing")
+                    journal.record("saved_search", search.id, search.id, created=True)
+                continue
+        else:
+            journal.record("dashboard", name, None, created=True)
+        md.import_dashboard(oci.management_dashboard.models.ManagementDashboardImportDetails(
+            dashboards=[item]), **({"if_match": etag} if etag else {}))
+        matches = [d for d in inventory() if d.display_name == name and
+            d.compartment_id == compartment and
+            (d.freeform_tags or {}).get("zpr-installation") == journal.installation]
+        if len(matches) != 1:
+            raise ValueError("import identity not yet resolvable; retry bootstrap")
+        journal.record("dashboard", name, matches[0].dashboard_id, created=True, revision=revision)
+        searches = getattr(md.get_management_dashboard(matches[0].dashboard_id).data, "saved_searches", None) or []
+        for search in searches:
+            if search.compartment_id != compartment or (search.freeform_tags or {}).get("zpr-installation") != journal.installation:
+                raise ValueError("saved search ownership missing")
+            journal.record("saved_search", search.id, search.id, created=True)
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="oci-zpr-visibility deploy-dashboard")
     p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
@@ -205,6 +327,8 @@ def main(argv=None) -> int:
     p.add_argument("--region", default=None)
     p.add_argument("--compartment-id", default=None, help="defaults to the tenancy OCID")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--installation-id")
+    p.add_argument("--state-bucket")
     p.add_argument("--quiet", action="store_true", help="suppress target identifiers from output")
     args = p.parse_args(argv)
 
@@ -218,6 +342,11 @@ def main(argv=None) -> int:
         print("dashboard descriptor invalid:", *errors, sep="\n  ", file=sys.stderr)
         return 2
     built = build_management_dashboards(dash, compartment_id)
+    if args.installation_id:
+        from .ownership import validate_installation
+        validate_installation(args.installation_id)
+        for item in built:
+            item["displayName"] += f" [{args.installation_id}]"
     if not args.quiet:
         print(f"dashboard suite: {len(built)} focused dashboards / "
               f"{sum(len(item['tiles']) for item in built)} tiles")
@@ -230,20 +359,18 @@ def main(argv=None) -> int:
         return 0
 
     md = client(session, "management_dashboard.DashxApisClient")
-    # idempotent: delete any existing same-name dashboard first
     try:
-        for item in built:
-            for d in md.list_management_dashboards(
-                compartment_id=compartment_id, display_name=item["displayName"]
-            ).data.items:
-                md.delete_management_dashboard(d.dashboard_id)
-                if not args.quiet:
-                    print(f"  replaced existing dashboard: {item['displayName']}")
-    except oci.exceptions.ServiceError as exc:
-        if not args.quiet:
-            print(f"  (list/delete skipped: {describe_exception(exc)})")
-    details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=built)
-    md.import_dashboard(details)
+        if args.installation_id:
+            if not args.state_bucket or not args.compartment_id:
+                raise ValueError("owned deployment requires state bucket and compartment")
+            from .ownership import Ownership
+            journal = Ownership(session, args.state_bucket, args.installation_id, compartment_id)
+            reconcile_owned_dashboards(md, built, compartment_id, journal)
+        else:
+            import_new_dashboard_suite(md, built, compartment_id)
+    except (oci.exceptions.ServiceError, ValueError) as exc:
+        print(f"dashboard import blocked: {describe_exception(exc)}", file=sys.stderr)
+        return 2
     if not args.quiet:
         print(f"imported dashboard suite: {len(built)} dashboards")
     return 0

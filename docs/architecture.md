@@ -86,7 +86,7 @@ stamps **Time** from `event_time`. Records are immediately queryable as
 `'Log Source' = 'OCI ZPR Visibility JSON'`.
 
 **F. Publish metrics + repeat.** `metrics.publish_metrics` posts gauges to the
-`zpr_visibility` Monitoring namespace; the controller's 15-minute cron re-runs
+`zpr_visibility` Monitoring namespace; the controller's 15-minute systemd timer re-runs
 `refresh` (collect → drift → upload → metrics), so the dashboard stays live.
 Because every run uploads a *full snapshot*, dashboard count widgets dedup to
 distinct identities (see §6) so totals don't multiply across runs.

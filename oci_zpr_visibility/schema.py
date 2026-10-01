@@ -7,7 +7,8 @@ from typing import Any, Iterable
 
 from .jsonutil import utc_now_iso
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
+CORRELATION_VERSION = "3"
 
 # Single vocabulary for zpr_run.flow_collection_status. Every producer must use
 # these tokens: the "Flow collection status" widget groups on the raw value, and
@@ -33,6 +34,8 @@ def normalize_record(
     *,
     run_id: str,
     inventory_snapshot_time: str | None = None,
+    installation_id: str | None = None,
+    scope_id: str | None = None,
 ) -> dict[str, Any]:
     """Add the common v2 evidence envelope without overwriting source fields."""
     normalized = dict(record)
@@ -47,6 +50,10 @@ def normalize_record(
         )
     if inventory_snapshot_time:
         normalized.setdefault("inventory_snapshot_time", inventory_snapshot_time)
+    if installation_id:
+        normalized.setdefault("installation_id", installation_id)
+    if scope_id:
+        normalized.setdefault("scope_id", scope_id)
     return normalized
 
 
@@ -55,12 +62,16 @@ def normalize_records(
     *,
     run_id: str,
     inventory_snapshot_time: str | None = None,
+    installation_id: str | None = None,
+    scope_id: str | None = None,
 ) -> list[dict[str, Any]]:
     return [
         normalize_record(
             record,
             run_id=run_id,
             inventory_snapshot_time=inventory_snapshot_time,
+            installation_id=installation_id,
+            scope_id=scope_id,
         )
         for record in records
     ]
@@ -77,6 +88,8 @@ def run_record(
     drift_count: int,
     flow_count: int,
     collection_error_count: int = 0,
+    installation_id: str | None = None,
+    scope_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a non-sensitive heartbeat/data-quality record for Log Analytics."""
     if flow_collection_status not in FLOW_COLLECTION_STATUSES:
@@ -98,4 +111,6 @@ def run_record(
         },
         run_id=run_id,
         inventory_snapshot_time=event_time,
+        installation_id=installation_id,
+        scope_id=scope_id,
     )

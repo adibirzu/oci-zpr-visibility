@@ -23,6 +23,13 @@ RELATION_RE = re.compile(
     r"(?:\s+endpoints?)?(?:$|\s+where\s+|\s+using\s+)",
     re.IGNORECASE,
 )
+VCN_SCOPE_RE = re.compile(
+    r"^(?P<scope>(?:vcn|network)s?:[A-Za-z0-9_.-]+)(?:\s+VCN)?$", re.IGNORECASE
+)
+ENDPOINT_SCOPE_RE = re.compile(
+    r"\s+in\s+(?P<scope>(?:vcn|network)s?:[A-Za-z0-9_.-]+)(?:\s+VCN)?$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +40,8 @@ class ParsedStatement:
     source_attribute: str | None
     destination_attribute: str | None
     network_scope: str | None
+    source_vcn_scope: str | None
+    destination_vcn_scope: str | None
     target_type: str
     cidrs: tuple[str, ...]
     ips: tuple[str, ...]
@@ -53,6 +62,8 @@ class ParsedStatement:
             "source_attribute": self.source_attribute,
             "destination_attribute": self.destination_attribute,
             "network_scope": self.network_scope,
+            "source_vcn_scope": self.source_vcn_scope,
+            "destination_vcn_scope": self.destination_vcn_scope,
             "target_type": self.target_type,
             "cidrs": list(self.cidrs),
             "ips": list(self.ips),
@@ -100,6 +111,27 @@ def _attributes(text: str) -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _scope_reference(text: str | None) -> str | None:
+    """Return a documented VCN/network scope reference, if the text is one.
+
+    Scope tokens look syntactically like attribute references, so they must be
+    removed before endpoint attribute matching.  Keeping this deliberately
+    narrow is safer than guessing that arbitrary ``namespace:value`` text is a
+    VCN scope.
+    """
+    if not text:
+        return None
+    match = VCN_SCOPE_RE.fullmatch(text.strip())
+    return match.group("scope") if match else None
+
+
+def _endpoint_and_scope(text: str) -> tuple[str, str | None]:
+    match = ENDPOINT_SCOPE_RE.search(text)
+    if not match:
+        return text, None
+    return text[:match.start()].strip(), match.group("scope")
+
+
 def _endpoint_type(text: str, attributes: list[str], cidrs: tuple[str, ...], ips: tuple[str, ...]) -> str:
     lowered = text.lower()
     if attributes:
@@ -126,6 +158,8 @@ def parse_statement(statement: str) -> ParsedStatement:
     source_attribute: str | None = None
     destination_attribute: str | None = None
     network_scope: str | None = None
+    source_vcn_scope: str | None = None
+    destination_vcn_scope: str | None = None
     confidence = "low"
     source_cidrs: tuple[str, ...] = ()
     destination_cidrs: tuple[str, ...] = ()
@@ -136,8 +170,10 @@ def parse_statement(statement: str) -> ParsedStatement:
 
     if relation:
         network_scope = relation.group("scope")
-        source_text = relation.group("source")
-        destination_text = relation.group("destination")
+        source_vcn_scope = _scope_reference(network_scope)
+        source_text, inline_source_scope = _endpoint_and_scope(relation.group("source"))
+        destination_text, destination_vcn_scope = _endpoint_and_scope(relation.group("destination"))
+        source_vcn_scope = inline_source_scope or source_vcn_scope
         source_refs = _attributes(source_text)
         destination_refs = _attributes(destination_text)
         source_cidrs = _valid_cidrs(source_text)
@@ -156,6 +192,10 @@ def parse_statement(statement: str) -> ParsedStatement:
             confidence = "medium"
 
     target_type = destination_type
+    # A VCN scope is structural policy context, not a security attribute.
+    references = tuple(
+        ref for ref in references if ref not in {source_vcn_scope, destination_vcn_scope}
+    )
 
     return ParsedStatement(
         raw_statement=raw,
@@ -164,6 +204,8 @@ def parse_statement(statement: str) -> ParsedStatement:
         source_attribute=source_attribute,
         destination_attribute=destination_attribute,
         network_scope=network_scope,
+        source_vcn_scope=source_vcn_scope,
+        destination_vcn_scope=destination_vcn_scope,
         target_type=target_type,
         cidrs=cidrs,
         ips=ips,

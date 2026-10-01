@@ -122,6 +122,10 @@ resource "oci_core_instance" "endpoint" {
     source_type = "image"
     source_id   = var.image_ocid
   }
+  # Require IMDSv2: disable the legacy IMDSv1 endpoints on every endpoint.
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
   create_vnic_details {
     subnet_id        = oci_core_subnet.demo.id
     private_ip       = each.value

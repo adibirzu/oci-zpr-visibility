@@ -4,7 +4,7 @@
 locals {
   endpoints = {
     web = { ip = "10.20.1.10", peer = "10.20.1.20", port = 1521, tier = "web" }
-    db  = { ip = "10.20.1.20", peer = "10.20.1.10", port = 22, tier = "db" }
+    db  = { ip = "10.20.1.20", peer = "10.20.1.10", port = 8080, tier = "db" }
   }
 }
 
@@ -26,6 +26,15 @@ resource "oci_core_instance" "endpoint" {
     source_type = "image"
     source_id   = var.instance_image_ocid
   }
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+  agent_config {
+    plugins_config {
+      name          = "Compute Instance Run Command"
+      desired_state = "ENABLED"
+    }
+  }
   create_vnic_details {
     subnet_id        = oci_core_subnet.endpoints.id
     private_ip       = each.value.ip
@@ -35,9 +44,28 @@ resource "oci_core_instance" "endpoint" {
   metadata = merge(
     { user_data = base64encode(<<-EOT
       #!/bin/bash
+      set -euo pipefail
+      cat >/etc/systemd/system/zpr-listener.service <<'EOS'
+      [Unit]
+      Description=ZPR lab application listener
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      ExecStart=/usr/bin/python3 -m http.server ${each.key == "db" ? 1521 : 8080} --bind 0.0.0.0
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+      EOS
       cat >/usr/local/bin/zpr-traffic.sh <<'EOS'
       #!/bin/bash
-      while true; do timeout 2 bash -c "echo > /dev/tcp/${each.value.peer}/${each.value.port}" 2>/dev/null; sleep 15; done
+      # web -> db is the allowed application path. db -> web has no matching
+      # ZPR allow policy and is the intentional blocked-path canary. Flow-log
+      # action is observed independently; do not infer the rejecting control.
+      while true; do
+        curl --silent --output /dev/null --connect-timeout 2 --max-time 3 \
+          "http://${each.value.peer}:${each.value.port}/" || true
+        sleep 15
+      done
       EOS
       chmod +x /usr/local/bin/zpr-traffic.sh
       cat >/etc/systemd/system/zpr-traffic.service <<'EOS'
@@ -51,6 +79,7 @@ resource "oci_core_instance" "endpoint" {
       WantedBy=multi-user.target
       EOS
       systemctl daemon-reload && systemctl enable --now zpr-traffic.service
+      systemctl enable --now zpr-listener.service
     EOT
     ) },
     var.ssh_public_key == "" ? {} : { ssh_authorized_keys = var.ssh_public_key },

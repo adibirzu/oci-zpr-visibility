@@ -81,6 +81,11 @@ class DashboardSchemaTests(unittest.TestCase):
         self.assertIn("zpr_attribution", by_name["Rejected protected destinations"]["query"])
         self.assertEqual(by_name["Flow path link (src to dst)"]["visualization_type"], "link")
 
+    def test_active_policy_kpi_uses_each_policy_latest_observation(self):
+        query = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}["Active ZPR policies"]["query"]
+        self.assertIn("latest(policy_lifecycle_state)", query)
+        self.assertIn("current_policy_lifecycle_state = 'ACTIVE'", query)
+
     def test_flow_decision_tables_carry_enforcement_honesty_qualifiers(self):
         # zpr_attribution is always INFERRED_NOT_PROVIDER_VERDICT: ZPR emits no
         # decision log, so an allow/reject row is inferred from VCN flow logs.

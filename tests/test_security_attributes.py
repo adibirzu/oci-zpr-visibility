@@ -69,6 +69,10 @@ class MatchReferenceTests(unittest.TestCase):
         self.assertFalse(attribute_matches_reference(attrs, "app:db"))
         self.assertTrue(attribute_matches_reference(attrs, "oracle-zpr.app:web"))
 
+    def test_unqualified_reference_is_inconclusive_when_namespaces_collide(self):
+        attrs = {"oracle-zpr.app": "web", "other.app": "web"}
+        self.assertFalse(attribute_matches_reference(attrs, "app:web"))
+
     def test_bare_membership(self):
         self.assertTrue(attribute_matches_reference(self.attrs, "apps.role"))
         self.assertTrue(attribute_matches_reference(self.attrs, "web"))

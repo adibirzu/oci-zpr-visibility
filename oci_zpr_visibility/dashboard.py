@@ -40,7 +40,14 @@ VALID_VISUALIZATIONS = {
 
 
 def load_dashboard(path: Path | None = None) -> dict[str, Any]:
-    return json.loads((path or DASHBOARD_PATH).read_text())
+    dash = json.loads((path or DASHBOARD_PATH).read_text())
+    source = os.environ.get("OCI_ZPR_SOURCE_NAME")
+    if source:
+        if any(char in source for char in "'\n\r"):
+            raise ValueError("invalid Log Analytics source name")
+        for widget in iter_widgets(dash):
+            widget["query"] = widget["query"].replace(SOURCE_DISPLAY_NAME, source)
+    return dash
 
 
 def iter_widgets(dash: dict[str, Any]) -> list[dict[str, Any]]:

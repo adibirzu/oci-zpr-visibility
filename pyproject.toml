@@ -7,9 +7,11 @@ name = "oci-zpr-visibility"
 version = "0.1.0"
 description = "OCI Zero Trust Packet Routing visibility collector, flow correlator, and Log Analytics integration helpers."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
-  "oci>=2.176.0",
+  "oci==2.185.1",
 ]
 
 [project.optional-dependencies]
