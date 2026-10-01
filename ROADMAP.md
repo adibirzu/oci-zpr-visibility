@@ -101,10 +101,13 @@ guide. These are product design references, not claims of feature parity.
 ## Current release gates (October 1, 2026)
 
 - Latest `orm-stack.zip` SHA-256:
-  `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`.
-- Resource Manager stack source was updated and its fresh plan succeeded with
-  5 adds, 5 changes and 4 destroys. The plan is unapplied and needs approval
-  tied to that exact plan; see `docs/resource-manager-lifecycle-review.md`.
+  `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd`.
+- The active Resource Manager stack's last uploaded ZIP was
+  `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`; its
+  plan succeeded with 5 adds, 5 changes and 4 destroys, but is unapplied. The
+  current local/GitHub ZIP differs and has not been uploaded or planned. Upload
+  this exact artifact and create/review a fresh plan before any apply; see
+  `docs/resource-manager-lifecycle-review.md`.
 - Marketplace payload builds reproducibly, checksums/SBOM pass, and Packer
   template validation passes. No OCI image has been built or launched and no
   Marketplace listing has been submitted.

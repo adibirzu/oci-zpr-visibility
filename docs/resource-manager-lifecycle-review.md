@@ -4,16 +4,19 @@
 
 The source now removes the failed Resource Manager job-side authentication
 assumption and provides a private operator readiness/cleanup path. Local
-validation is green. The current `orm-stack.zip` (SHA-256
-`27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`) was
-uploaded to the active named stack on October 1, 2026, and its fresh Resource
-Manager plan succeeded. That plan has 5 adds, 5 changes and 4 destroys,
+validation is green. On October 1, 2026, ZIP SHA-256
+`27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039` was
+uploaded to the active named stack and its Resource Manager plan succeeded.
+That historical plan has 5 adds, 5 changes and 4 destroys,
 including replacement of the controller instance, its subnet, and package
 object; IGW removal and NAT creation; collector revision creation; and
 in-place updates to the route table, dynamic group, IAM policy, state bucket,
 and ZPR policy. The endpoint instances are not planned for replacement. The
 plan has not been applied; the exact action set still needs current approval.
-No destroy was run.
+No destroy was run. The current local/GitHub ZIP is SHA-256
+`a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd` and is not
+the uploaded artifact. The historical plan does not cover this newer ZIP;
+upload it and create/review a fresh plan before any apply.
 
 ## Findings and fixes
 
@@ -49,8 +52,9 @@ No destroy was run.
 - 172 application tests passed; deterministic-core coverage was 86.19%.
 - All three Terraform roots passed formatting and validation after the RM
   lifecycle correction.
-- `scripts/check_release_artifacts.py` passed on the current uploaded ZIP; its
-  SHA-256 matches the local reproducible archive.
+- `scripts/check_release_artifacts.py` passes on the current local reproducible
+  ZIP. At this review, the uploaded stack source is the historical ZIP above;
+  the newer local package needs a new upload and plan.
 - An earlier RM plan was provider-verified for the explicit precondition error
   and made no infrastructure changes. The latest source-matched plan
   succeeded with 5 adds, 5 changes and 4 destroys, but remains unapplied.

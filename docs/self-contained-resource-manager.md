@@ -111,11 +111,13 @@ tenancy-wide ZPR or onboard the Log Analytics singleton. Log Analytics
 namespace content-management IAM remains tenancy-scoped where the service
 requires it; review this permission, retention and cost before deployment.
 
-The current Resource Manager ZIP has SHA-256
+The active stack's last uploaded ZIP had SHA-256
 `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`. Its
-source was uploaded to the active stack on October 1, 2026, and a fresh plan
-succeeded with five additions, five changes and four destroys, including
-controller/subnet replacement, IGW removal/NAT creation, and related
-IAM/storage/ZPR metadata changes. It remains unapplied pending approval for
-that exact saved plan. Marketplace image sanitation, launch testing, publisher
-eligibility and Oracle acceptance are separate gates.
+October 1, 2026 plan succeeded with five additions, five changes and four
+destroys, including controller/subnet replacement, IGW removal/NAT creation,
+and related IAM/storage/ZPR metadata changes. It remains unapplied. The current
+local/GitHub ZIP is `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd`;
+it has not been uploaded or planned, so the earlier plan must not be applied to
+it. Upload the exact current artifact and review a fresh plan first. Marketplace
+image sanitation, launch testing, publisher eligibility and Oracle acceptance
+are separate gates.

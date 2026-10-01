@@ -20,7 +20,8 @@ private addresses, saved plans or raw provider output.
 | Packer checksum verification reported the downloaded archive missing | `shasum --check` resolved the checksum manifest's filename relative to the repository working directory, not the download directory. | Run checksum verification from the private download directory and map the manifest filename to the locally saved archive name. Packer 1.16.1/plugin 1.1.2 then validated without OCI access. |
 
 The failed plan is not an apply failure: it made no infrastructure changes.
-The latest source-matched plan for ZIP SHA-256
+The October 1 source-matched plan for uploaded ZIP SHA-256
 `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039` succeeded
-with 5 adds, 5 changes and 4 destroys. It remains unapplied and needs exact-
-plan review and approval before any apply.
+with 5 adds, 5 changes and 4 destroys. It remains unapplied. The current local
+ZIP is `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd` and
+has not been uploaded or planned; create a fresh exact-source plan before apply.
