@@ -17,12 +17,25 @@ def builder():
     return module
 
 
+def collector_builder():
+    spec = importlib.util.spec_from_file_location(
+        "collector_builder", ROOT / "scripts/build_collector_archive.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def fixture_root(tmp_path, module):
     root = tmp_path / "source"
     for name in module.INPUTS:
         target = root / "orm" / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / "orm" / name, target)
+        if name == "oci_zpr_visibility_pkg.tgz":
+            # The package is generated and gitignored; clean checkouts must not
+            # rely on a local build having run before the test suite.
+            collector_builder().build_archive(ROOT, target)
+        else:
+            shutil.copyfile(ROOT / "orm" / name, target)
     return root
 
 

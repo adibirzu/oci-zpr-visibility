@@ -104,8 +104,16 @@ jobs:
           (cd "$packer_dir" && grep 'packer_1.16.1_linux_amd64.zip$' SHA256SUMS | sed 's#packer_1.16.1_linux_amd64.zip#packer.zip#' | sha256sum --check -)
           unzip -q "$packer_dir/packer.zip" -d "$packer_dir"
           PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" init image/zpr.pkr.hcl
-          PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" validate \
+          packer_home="$RUNNER_TEMP/packer-home"
+          mkdir -m 700 -p "$packer_home/.oci"
+          openssl genrsa -out "$packer_home/.oci/validate.pem" 2048 2>/dev/null
+          fingerprint="$(openssl rsa -in "$packer_home/.oci/validate.pem" -pubout -outform DER 2>/dev/null | openssl md5 -c | awk '{print $2}')"
+          printf '[DEFAULT]\nuser=ocid1.user.oc1..example\nfingerprint=%s\ntenancy=ocid1.tenancy.oc1..example\nregion=us-ashburn-1\nkey_file=%s\n' \
+            "$fingerprint" "$packer_home/.oci/validate.pem" > "$packer_home/.oci/config"
+          chmod 600 "$packer_home/.oci/config" "$packer_home/.oci/validate.pem"
+          HOME="$packer_home" PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" validate \
             -var 'profile=DEFAULT' -var 'availability_domain=availability-domain-placeholder' \
+            -var 'use_instance_principals=false' \
             -var 'compartment_ocid=ocid1.compartment.oc1..example' \
             -var 'base_image_ocid=ocid1.image.oc1..example' \
             -var 'subnet_ocid=ocid1.subnet.oc1..example' \

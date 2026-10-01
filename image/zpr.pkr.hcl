@@ -8,6 +8,10 @@ packer {
 }
 
 variable "profile" { type = string }
+variable "use_instance_principals" {
+  type    = bool
+  default = false
+}
 variable "availability_domain" { type = string }
 variable "compartment_ocid" { type = string }
 variable "base_image_ocid" { type = string }
@@ -16,7 +20,8 @@ variable "image_name" { type = string }
 variable "bundle_path" { type = string }
 
 source "oracle-oci" "zpr" {
-  access_cfg_file_account = var.profile
+  access_cfg_file_account = var.use_instance_principals ? null : var.profile
+  use_instance_principals = var.use_instance_principals
   availability_domain    = var.availability_domain
   compartment_ocid       = var.compartment_ocid
   base_image_ocid        = var.base_image_ocid

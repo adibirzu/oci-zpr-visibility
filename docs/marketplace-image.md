@@ -68,6 +68,11 @@ scoped `validate-dashboards --expected-run-id` acceptance check.
 
 ## Live build gate
 
+The Packer template defaults to the named OCI config profile and also supports
+instance-principal authentication when Packer itself runs on OCI Compute. CI
+uses a generated, disposable signing key and synthetic profile for offline
+template validation; it does not authenticate to OCI or launch a builder.
+
 The Packer builder is private, x86_64, and disables IMDSv1. The operator must
 provide an approved private SSH route to the configured subnet, validated
 shape/image capacity, exact build inputs, reviewed resource costs, and cleanup
