@@ -4,10 +4,12 @@ The `orm/` stack provisions the entire ZPR visibility lab **and** its Log
 Analytics content + dashboard in one apply. Build the zip, upload it as a
 Resource Manager stack, and apply.
 
-**Review status (October 2, 2026):** the previously recorded RM plan is
-historical and does not cover the current local ZIP. The current package must
-be uploaded as a new stack version and receive a fresh plan before any apply.
-Local tests and Terraform validations do not establish provider readiness. See the
+**Review status (October 2, 2026):** the current source-parity-checked ZIP is
+uploaded to the existing active Resource Manager stack, and its fresh plan
+succeeded with 7 adds, 5 updates, and 4 destroys. The plan is not applied; it
+replaces the controller and its subnet, removes the old internet gateway,
+creates a NAT gateway, and updates IAM/storage/network resources. Apply remains
+gated on full action review and exact-plan approval. See the
 [lifecycle review](resource-manager-lifecycle-review.md) and
 [self-contained RM runbook](self-contained-resource-manager.md).
 

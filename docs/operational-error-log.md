@@ -19,11 +19,15 @@ private addresses, saved plans or raw provider output.
 | The initial image inventory marked the project wheel and `wheel` package license as `REVIEW_REQUIRED` | The project had no explicit license declaration, and wheel is a packaging-only tool rather than a runtime dependency. | Added the Apache-2.0 project license metadata/file, moved setuptools/wheel into a build-only lock, and made image packaging fail when any component has no license metadata. The regenerated bundle reports zero missing license metadata; publisher legal review remains required. |
 | Directly importing `build_image_bundle.py` in pytest could not find `build_collector_archive` | The script assumed Python's command-line script directory was on `sys.path`, which is not true for importlib-based tests. | Made the image payload descriptor allowlist explicit in the builder; its asset allowlist test passes and excludes Packer/install scripts and bytecode caches. |
 | Packer checksum verification reported the downloaded archive missing | `shasum --check` resolved the checksum manifest's filename relative to the repository working directory, not the download directory. | Run checksum verification from the private download directory and map the manifest filename to the locally saved archive name. Packer 1.16.1/plugin 1.1.2 then validated without OCI access. |
+| Resource Manager job list parsing failed with `Cannot index array with string "items"` | This OCI CLI response returned `data` as a direct array rather than an object containing `items`. | Normalize by checking the JSON type first: use `.data` when it is an array, otherwise use `.data.items`; do not infer job absence from a shape error. |
+| OCI Log Analytics rejected `source list` as an unknown command | The CLI uses operation-specific verbs for these groups; `source` has no generic `list` operation. Parser inventory is also namespace-scoped rather than compartment-scoped. | Discover installed command shapes with `oci log-analytics source --help` and `parser --help`; use `source list-sources --compartment-id ...` and `parser list-parsers --namespace-name ...`, then normalize the response envelope. |
+| OCL aggregation rows showed `null` for lowercase `count` despite returned rows | Query result aliases are case-sensitive in the JSON response; this result named the aggregate column `Count`. | Read `.data.columns[].display-name` and use that exact output key when summarizing rows. The query returned seven record-type groups, 42 records total, in the bounded 24-hour window. |
+| OCI Logging Search returned `404 NotAuthorizedOrNotFound` for the scoped Flow Log query | The service deliberately does not distinguish missing target from missing permission in this response. | Keep the result inconclusive. Revalidate the exact Logging log/group IDs and the caller's `read log-content` access within the preflighted compartment; do not widen scope or report that Flow Logs are absent. |
 
-The failed plan is not an apply failure: it made no infrastructure changes.
-At the time of the October 1 review, the source-matched plan for uploaded ZIP SHA-256
+The failed October 1 precondition plan made no infrastructure changes. Its
+source-matched follow-up plan for ZIP SHA-256
 `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039` succeeded
-with 5 adds, 5 changes and 4 destroys. It remains unapplied. That review's local
-ZIP was `db2549ccf20334e421c7abb6edc2b0157617416b65fa76c5a8ac873c8bdc25b3` and
-was not uploaded or planned; the newer October 2 artifact is tracked in the
-current lifecycle review and also requires a fresh exact-source plan before apply.
+with 5 adds, 5 changes and 4 destroys, but is superseded and unapplied. On
+October 2, the current artifact was uploaded and freshly planned; that plan has
+7 adds, 5 updates and 4 destroys and remains unapplied pending exact-plan
+approval. See the [current lifecycle review](resource-manager-lifecycle-review.md).

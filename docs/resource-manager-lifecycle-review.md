@@ -2,30 +2,44 @@
 
 ## Current verdict
 
-**October 2, 2026 local gate:** 186 tests pass, pure-core coverage is 87.82%,
+**October 2, 2026 local gate:** 188 tests pass, pure-core coverage is 87.82%,
 all three Terraform roots format and validate, Actionlint is clean, and the
 release archive parity check passes. The regenerated offline Marketplace
 payload also passes its SHA-256 manifest and CycloneDX JSON checks. The current
 `orm-stack.zip` SHA-256 is
-`73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422`.
-These are local checks; no new upload, Resource Manager plan/apply/destroy,
-live ingestion, image launch, or Marketplace acceptance was performed.
+`1fd839256b177c566566d167b71762f197488c9caede5735354eef67d584c47e`.
 
-The source now removes the failed Resource Manager job-side authentication
-assumption and provides a private operator readiness/cleanup path. Local
-validation is green. On October 1, 2026, ZIP SHA-256
-`27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039` was
-uploaded to the active named stack and its Resource Manager plan succeeded.
-That historical plan has 5 adds, 5 changes and 4 destroys,
-including replacement of the controller instance, its subnet, and package
-object; IGW removal and NAT creation; collector revision creation; and
-in-place updates to the route table, dynamic group, IAM policy, state bucket,
-and ZPR policy. The endpoint instances are not planned for replacement. The
-plan has not been applied; the exact action set still needs current approval.
-No destroy was run. The current local ZIP is SHA-256
-`73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422` and is not
-the uploaded artifact. The historical plan does not cover this newer ZIP;
-upload it and create/review a fresh plan before any apply.
+**Resource Manager source update is provider-verified:** this exact archive was
+uploaded to the existing active `ZIP_UPLOAD` stack in the selected deployment
+compartment, preserving its six variables. A fresh plan for this source
+succeeded with **7 adds, 5 updates, and 4 destroys**. It is not applied. The
+exact plan includes replacement of the controller VM, its subnet, and the
+package object; deletion of the old internet gateway and creation of a NAT
+gateway; and updates to the route table, dynamic group, IAM policy, state
+bucket, and ZPR policy resource metadata. The web/database instances are
+`no-op`, and their user-data is unchanged. The ZPR policy statements are
+unchanged. The IAM change narrows several grants from tenancy to compartment,
+but still grants `manage loganalytics-features-family` in tenancy; review that
+scope before apply. Starting the two endpoint instances was separately
+requested and is provider-verified; they are now `RUNNING`. The controller is
+still `STOPPED` because this plan would replace it.
+
+**Current Log Analytics inventory is provider-verified:** the deployment
+compartment contains the ZPR JSON source, its parser, seven ZPR dashboards, and
+98 fields mapped to that source. A scoped last-24-hour query returned 42 records
+across seven record types: one collection gap, 25 coverage records, five
+findings, two policy-drift records, two policy statements, six resources, and
+one run. It returned no `zpr_enriched_flow` records. Thus existing content and
+historical collection data are present, but current traffic-to-Log-Analytics
+and dashboard HIT status are not yet proven. The direct Logging Search query
+returned `NotAuthorizedOrNotFound`; until its permission/resource scope is
+disambiguated, it is not evidence that Flow Logs are absent.
+
+The earlier October 1 plan (5 adds, 5 changes, 4 destroys) is superseded by the
+fresh plan above. No apply or destroy has run. Applying the current plan remains
+gated on review and current approval tied to its exact action set. No image
+build, private image launch, vulnerability scan, publisher review, or Oracle
+Marketplace acceptance is claimed.
 
 ## Findings and fixes
 
@@ -46,16 +60,13 @@ upload it and create/review a fresh plan before any apply.
    requests guest cleanup, verifies the receipt, deletes only known state
    objects and retires the exact lab attribute before the RM destroy job.
    Foreign content/shared fields and unknown bucket objects block cleanup.
-4. **P2 — controller and subnet replacement remain a fresh-plan review item.**
-   The latest plan proposes IGW removal/NAT creation, IAM/storage updates and
-   ZPR policy normalization. It does not propose endpoint instance replacement.
-   These changes are not approved by the historical plan token; obtain approval
-   tied to the latest exact plan before applying.
-   The current source also fingerprints endpoint bootstrap scripts and binds
-   content changes to endpoint replacement, so an upgrade cannot leave old
-   first-boot listeners silently active. The replacement action set for the
-   current ZIP has not been provider-planned or applied; review exact endpoint
-   replacements in a fresh RM plan before approval.
+4. **P2 — the current saved plan contains disruptive replacement and IAM changes.**
+   The controller and controller subnet are replaced, the old internet gateway
+   is deleted, and the package object is replaced. The endpoint instances are
+   `no-op` because their first-boot user-data matches the existing instances.
+   Review the full saved plan, cost/availability impact, and the remaining
+   tenancy-scoped Log Analytics grant before any apply. Do not reuse approval
+   for the historical October 1 plan.
 5. **P2 — Marketplace image readiness is separate.** The image bundle/Packer
    source is code-backed only. No image build, sanitation/vulnerability scan,
    private launch acceptance, publisher review or Oracle Marketplace
@@ -67,13 +78,12 @@ upload it and create/review a fresh plan before any apply.
 - All three Terraform roots passed formatting and validation after the RM
   lifecycle correction.
 - `scripts/check_release_artifacts.py` passes on the current local reproducible
-  ZIP. At this review, the uploaded stack source is the historical ZIP above;
-  the newer local package needs a new upload and plan.
-- An earlier RM plan was provider-verified for the explicit precondition error
-  and made no infrastructure changes. The latest source-matched plan
-  succeeded with 5 adds, 5 changes and 4 destroys, but remains unapplied.
-- Historical LA indexing/query evidence from a prior deployment is not proof
-  that the current stack package is bootstrapped or producing fresh records.
+  ZIP, and that exact ZIP is now provider-uploaded and planned.
+- The current source-matched RM plan succeeded with 7 adds, 5 updates and 4
+  destroys, and remains unapplied pending exact-plan approval.
+- Provider reads confirm ZPR Log Analytics source/parser/dashboard inventory
+  and recent records, but no recent flow records, current controller refresh,
+  endpoint application response, dashboard query HIT, or scheduled refresh.
 
 ## Release acceptance still required
 
