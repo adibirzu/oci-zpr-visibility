@@ -1,10 +1,37 @@
 """Zero-row gating rules for the live dashboard validation run."""
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
+import oci
 
 from oci_zpr_visibility import dashboard
-from oci_zpr_visibility.validate_dashboards import _widget_status
+from oci_zpr_visibility.validate_dashboards import _widget_status, _count_rows, _count_indexed_records
 
-FLOW_WIDGET = {"name": "KPI: Blocked flows", "data_dependency": dashboard.FLOW_DEPENDENCY}
+
+def test_freshness_queries_are_compartment_scoped_and_include_subtree():
+    client = Mock()
+    client.query.return_value.data = SimpleNamespace(total_count=1, items=[])
+    assert _count_rows(client, "namespace", oci.log_analytics.models,
+                       {"tenancy": "root", "query_compartment": "deployment"},
+                       None, "query") == 1
+    details = client.query.call_args.kwargs["query_details"]
+    assert details.compartment_id == "deployment"
+    assert details.compartment_id_in_subtree is True
+
+
+def test_freshness_uses_exact_aggregate_instead_of_capped_record_total():
+    client = Mock()
+    client.query.return_value.data = SimpleNamespace(
+        total_count=1, items=[{"indexed_records": 1042}])
+    assert _count_indexed_records(client, "namespace", oci.log_analytics.models,
+                                 {"tenancy": "root", "query_compartment": "deployment"},
+                                 None, "run") == 1042
+    details = client.query.call_args.kwargs["query_details"]
+    assert details.compartment_id == "deployment"
+    assert details.compartment_id_in_subtree is True
+    assert "stats count as indexed_records" in details.query_string
+
+FLOW_WIDGET = {"name": "KPI: Flow Log REJECT tuples", "data_dependency": dashboard.FLOW_DEPENDENCY}
 INVENTORY_WIDGET = {"name": "KPI: Active policies"}
 ALLOW_ZERO_WIDGET = {"name": "Collection gaps", "allow_zero": True}
 

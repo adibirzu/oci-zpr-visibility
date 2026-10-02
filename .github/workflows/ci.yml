@@ -9,7 +9,7 @@ on:
 jobs:
   python:
     name: Python tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -17,10 +17,25 @@ jobs:
           python-version: "3.11"
       - name: Install
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install --require-hashes --only-binary=:all: -r requirements-runtime.lock
+          pip install --require-hashes --only-binary=:all: -r requirements-build.lock
+          pip install --no-deps --no-build-isolation -e .
+          pip install pytest==8.4.2 pytest-cov==6.2.1
       - name: Test
         run: pytest tests/ -q
+      - name: Build and admit Resource Manager package
+        run: |
+          python scripts/check_release_artifacts.py
+          bash scripts/build_orm_zip.sh
+          python scripts/check_release_artifacts.py
+      - name: Installed wheel smoke test
+        run: |
+          python -m pip wheel --no-deps --no-build-isolation . -w /tmp/zpr-wheels
+          python -m venv /tmp/zpr-installed
+          /tmp/zpr-installed/bin/pip install --require-hashes --only-binary=:all: -r requirements-runtime.lock
+          /tmp/zpr-installed/bin/pip install --no-deps /tmp/zpr-wheels/*.whl
+          cd /tmp
+          /tmp/zpr-installed/bin/oci-zpr-visibility --help
       - name: Coverage gate (pure-logic core >= 80%)
         run: |
           pytest tests/ -q \
@@ -32,15 +47,82 @@ jobs:
 
   terraform:
     name: Terraform validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        root: [terraform, terraform/zpr-demo, orm]
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.5.7"
       - name: Format check
-        run: terraform -chdir=terraform fmt -check -recursive
+        run: terraform -chdir=${{ matrix.root }} fmt -check -recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Build collector for ORM validation
+        if: matrix.root == 'orm'
+        run: bash scripts/build_orm_zip.sh
       - name: Validate
         run: |
-          terraform -chdir=terraform init -backend=false -input=false
-          terraform -chdir=terraform validate
+          terraform -chdir=${{ matrix.root }} init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=${{ matrix.root }} validate
+
+  image-bundle:
+    name: Marketplace image payload admission
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install pinned build tools
+        run: "python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock"
+      - name: Resolve the locked Linux runtime wheelhouse
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/zpr-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: \
+            --implementation cp --python-version 311 --abi cp311 \
+            --platform manylinux2014_x86_64 \
+            --dest "$RUNNER_TEMP/zpr-wheelhouse" -r requirements-runtime.lock
+      - name: Build and verify offline image payload
+        run: |
+          SOURCE_DATE_EPOCH=1790793600 python scripts/build_image_bundle.py \
+            --wheelhouse "$RUNNER_TEMP/zpr-wheelhouse" \
+            --output "$RUNNER_TEMP/zpr-image-bundle"
+          cd "$RUNNER_TEMP/zpr-image-bundle"
+          sha256sum --check SHA256SUMS
+          python -m json.tool sbom.cdx.json >/dev/null
+      - name: Validate pinned Packer template
+        run: |
+          set -euo pipefail
+          packer_dir="$RUNNER_TEMP/packer"
+          mkdir -m 700 "$packer_dir" "$RUNNER_TEMP/packer-plugins"
+          curl -fsSL https://releases.hashicorp.com/packer/1.16.1/packer_1.16.1_linux_amd64.zip -o "$packer_dir/packer.zip"
+          curl -fsSL https://releases.hashicorp.com/packer/1.16.1/packer_1.16.1_SHA256SUMS -o "$packer_dir/SHA256SUMS"
+          (cd "$packer_dir" && grep 'packer_1.16.1_linux_amd64.zip$' SHA256SUMS | sed 's#packer_1.16.1_linux_amd64.zip#packer.zip#' | sha256sum --check -)
+          unzip -q "$packer_dir/packer.zip" -d "$packer_dir"
+          PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" init image/zpr.pkr.hcl
+          packer_home="$RUNNER_TEMP/packer-home"
+          mkdir -p "$packer_home/.oci"
+          chmod 700 "$packer_home" "$packer_home/.oci"
+          openssl genrsa -out "$packer_home/.oci/validate.pem" 2048 2>/dev/null
+          fingerprint="$(openssl rsa -in "$packer_home/.oci/validate.pem" -pubout -outform DER 2>/dev/null | openssl md5 -c | awk '{print $NF}')"
+          printf '[DEFAULT]\nuser=ocid1.user.oc1..example\nfingerprint=%s\ntenancy=ocid1.tenancy.oc1..example\nregion=us-ashburn-1\nkey_file=%s\n' \
+            "$fingerprint" "$packer_home/.oci/validate.pem" > "$packer_home/.oci/config"
+          chmod 600 "$packer_home/.oci/config" "$packer_home/.oci/validate.pem"
+          PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" validate \
+            -var "oci_config_file=$packer_home/.oci/config" \
+            -var 'profile=DEFAULT' -var 'availability_domain=availability-domain-placeholder' \
+            -var 'use_instance_principals=false' \
+            -var 'compartment_ocid=ocid1.compartment.oc1..example' \
+            -var 'base_image_ocid=ocid1.image.oc1..example' \
+            -var 'subnet_ocid=ocid1.subnet.oc1..example' \
+            -var 'image_name=zpr-visibility-candidate' \
+            -var "bundle_path=$RUNNER_TEMP/zpr-image-bundle" image/zpr.pkr.hcl
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: zpr-marketplace-image-payload
+          path: ${{ runner.temp }}/zpr-image-bundle/
+          if-no-files-found: error

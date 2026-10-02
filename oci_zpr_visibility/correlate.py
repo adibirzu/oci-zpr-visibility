@@ -6,6 +6,7 @@ import ipaddress
 from typing import Any
 
 from .security_attributes import attribute_matches_reference, render_attributes
+from .schema import CORRELATION_VERSION
 
 
 def _data(record: dict[str, Any]) -> dict[str, Any]:
@@ -13,17 +14,64 @@ def _data(record: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else record
 
 
-def _ip_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    mapping: dict[str, dict[str, Any]] = {}
-    for entry in snapshot.get("ip_resource_map", []):
+def _ip_candidates(snapshot: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Index endpoint records without assuming private IPs are tenancy-unique."""
+    mapping: dict[str, list[dict[str, Any]]] = {}
+    seen: set[tuple[str, str, str, str]] = set()
+    for entry in [*snapshot.get("ip_resource_map", []), *snapshot.get("resources", [])]:
         ip = entry.get("private_ip")
-        if ip:
-            mapping[str(ip)] = entry
-    for resource in snapshot.get("resources", []):
-        ip = resource.get("private_ip")
-        if ip and ip not in mapping:
-            mapping[str(ip)] = resource
+        if not ip:
+            continue
+        identity = (
+            str(ip), str(entry.get("resource_id") or ""), str(entry.get("vnic_id") or ""),
+            str(entry.get("vcn_id") or ""),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        mapping.setdefault(str(ip), []).append(entry)
     return mapping
+
+
+def _resolve_endpoint(
+    candidates: list[dict[str, Any]], data: dict[str, Any], raw: dict[str, Any], *,
+    use_capture_context: bool = True,
+) -> tuple[dict[str, Any], bool]:
+    """Resolve only a unique endpoint, optionally using VNIC/VCN log context."""
+    if not candidates:
+        return {}, False
+    if not use_capture_context:
+        return (candidates[0], False) if len(candidates) == 1 else ({}, len(candidates) > 1)
+    vnic_id = raw.get("oracle.vnicocid") or data.get("vnicId") or data.get("vnic_id")
+    vcn_id = raw.get("oracle.vcnocid") or data.get("vcnId") or data.get("vcn_id")
+    narrowed = candidates
+    if vnic_id:
+        by_vnic = [item for item in narrowed if item.get("vnic_id") == vnic_id]
+        if not by_vnic:
+            return {}, True
+        narrowed = by_vnic
+    if vcn_id:
+        by_vcn = [item for item in narrowed if item.get("vcn_id") == vcn_id]
+        if not by_vcn:
+            return {}, True
+        narrowed = by_vcn
+    return (narrowed[0], False) if len(narrowed) == 1 else ({}, True)
+
+
+def _capture_side(source_candidates, destination_candidates, data, raw):
+    """Return only the flow tuple side named by capture VNIC/VCN metadata."""
+    vnic_id = raw.get("oracle.vnicocid") or data.get("vnicId") or data.get("vnic_id")
+    vcn_id = raw.get("oracle.vcnocid") or data.get("vcnId") or data.get("vcn_id")
+    def matches(candidates):
+        if vnic_id:
+            return any(item.get("vnic_id") == vnic_id for item in candidates)
+        if vcn_id:
+            return any(item.get("vcn_id") == vcn_id for item in candidates)
+        return False
+    source_match, destination_match = matches(source_candidates), matches(destination_candidates)
+    if source_match != destination_match:
+        return "source" if source_match else "destination"
+    return None
 
 
 def _active(policy: dict[str, Any]) -> bool:
@@ -55,14 +103,37 @@ def _expected(
     dst_attrs: dict[str, str],
     source_ip: Any,
     destination_ip: Any,
+    source: dict[str, Any],
+    destination: dict[str, Any],
+    snapshot: dict[str, Any],
 ) -> dict[str, Any] | None:
     for policy in policy_records:
         if not _active(policy):
             continue
-        source = policy.get("source_attribute")
-        destination = policy.get("destination_attribute")
-        if source:
-            source_ok = attribute_matches_reference(src_attrs, str(source))
+        source_scope = policy.get("source_vcn_scope")
+        destination_scope = policy.get("destination_vcn_scope")
+        if source_scope or destination_scope:
+            def resolve_scope(reference):
+                if not reference:
+                    return None
+                candidates = [v for v in snapshot.get("resources", [])
+                    if str(v.get("resource_type", "")).lower() == "vcn"
+                    and (v.get("resource_id") == reference or
+                         attribute_matches_reference(v.get("normalized_security_attributes") or {}, str(reference)))]
+                return candidates[0].get("resource_id") if len(candidates) == 1 else None
+            source_vcn = resolve_scope(source_scope)
+            destination_vcn = resolve_scope(destination_scope)
+            if ((source_scope and (not source_vcn or not source.get("vcn_id"))) or
+                (destination_scope and (not destination_vcn or not destination.get("vcn_id")))):
+                continue
+            if source_scope and source.get("vcn_id") != source_vcn:
+                continue
+            if destination_scope and destination.get("vcn_id") != destination_vcn:
+                continue
+        source_attribute = policy.get("source_attribute")
+        destination_attribute = policy.get("destination_attribute")
+        if source_attribute:
+            source_ok = attribute_matches_reference(src_attrs, str(source_attribute))
         elif policy.get("source_type") == "cidr":
             source_ok = _address_matches(source_ip, policy.get("source_cidrs"), networks=True)
         elif policy.get("source_type") == "ip":
@@ -70,8 +141,8 @@ def _expected(
         else:
             source_ok = policy.get("source_type") == "all_endpoints"
         target_type = policy.get("target_type")
-        if destination:
-            destination_ok = attribute_matches_reference(dst_attrs, str(destination))
+        if destination_attribute:
+            destination_ok = attribute_matches_reference(dst_attrs, str(destination_attribute))
         elif target_type == "cidr":
             destination_ok = _address_matches(
                 destination_ip, policy.get("destination_cidrs") or policy.get("cidrs"), networks=True
@@ -106,7 +177,7 @@ def correlate_flow_records(
     snapshot: dict[str, Any],
     policy_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    ip_lookup = _ip_map(snapshot)
+    ip_lookup = _ip_candidates(snapshot)
     correlated: list[dict[str, Any]] = []
 
     for raw in flow_records:
@@ -114,15 +185,26 @@ def correlate_flow_records(
         source_ip = data.get("sourceAddress") or data.get("source_address")
         destination_ip = data.get("destinationAddress") or data.get("destination_address")
         action = data.get("action")
-        source = ip_lookup.get(str(source_ip), {}) if source_ip else {}
-        destination = ip_lookup.get(str(destination_ip), {}) if destination_ip else {}
+        source_candidates = ip_lookup.get(str(source_ip), []) if source_ip else []
+        destination_candidates = ip_lookup.get(str(destination_ip), []) if destination_ip else []
+        capture_side = _capture_side(source_candidates, destination_candidates, data, raw)
+        source, source_ambiguous = _resolve_endpoint(
+            source_candidates, data, raw, use_capture_context=capture_side == "source"
+        ) if source_ip else ({}, False)
+        destination, destination_ambiguous = _resolve_endpoint(
+            destination_candidates, data, raw, use_capture_context=capture_side == "destination"
+        ) if destination_ip else ({}, False)
         src_attrs = source.get("normalized_security_attributes") or {}
         dst_attrs = destination.get("normalized_security_attributes") or {}
         destination_has_zpr = bool(dst_attrs)
-        match = _expected(policy_records, src_attrs, dst_attrs, source_ip, destination_ip)
+        match = None if source_ambiguous or destination_ambiguous else _expected(
+            policy_records, src_attrs, dst_attrs, source_ip, destination_ip, source, destination, snapshot
+        )
         has_expected_policy = match is not None
 
-        if action == "ACCEPT" and has_expected_policy:
+        if source_ambiguous or destination_ambiguous:
+            classification = "needs_enrichment"
+        elif action == "ACCEPT" and has_expected_policy:
             classification = "expected_accepted"
         elif action == "ACCEPT" and destination_has_zpr:
             classification = "unexpected_accepted"
@@ -155,8 +237,13 @@ def correlate_flow_records(
                 "review_classification": review_classification,
                 "evidence_source": "OCI_VCN_FLOW_LOG_PLUS_ZPR_INVENTORY",
                 "zpr_attribution": "INFERRED_NOT_PROVIDER_VERDICT",
+                "correlation_version": CORRELATION_VERSION,
                 "correlation_confidence": match.get("confidence") if match else "LOW",
-                "correlation_reason": match.get("match_reason") if match else "no_complete_policy_match",
+                "correlation_reason": (
+                    "ambiguous_source_address" if source_ambiguous else
+                    "ambiguous_destination_address" if destination_ambiguous else
+                    match.get("match_reason") if match else "no_complete_policy_match"
+                ),
                 "source_ip": source_ip,
                 "destination_ip": destination_ip,
                 "source_port": data.get("sourcePort") or data.get("source_port"),

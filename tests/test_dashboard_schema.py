@@ -78,8 +78,35 @@ class DashboardSchemaTests(unittest.TestCase):
         self.assertIn("Latest visibility runs", by_name)
         self.assertIn("Explicit resource coverage gaps", by_name)
         self.assertIn("correlation_confidence", by_name["Accepted flows requiring policy review"]["query"])
-        self.assertIn("zpr_attribution", by_name["Rejected protected destinations"]["query"])
-        self.assertEqual(by_name["Flow path link (src to dst)"]["visualization_type"], "link")
+        self.assertIn("zpr_attribution", by_name["Flow Log REJECTs to protected destinations"]["query"])
+        self.assertEqual(by_name["Observed paths — VCN Flow Logs"]["visualization_type"], "link")
+
+    def test_flow_analyses_deduplicate_repeated_collection_rows(self):
+        by_name = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}
+        for name, dimensions in (
+            ("Top observed flow pairs", ("source_resource_name", "destination_resource_name")),
+            ("Flow IDs by protocol", ("protocol",)),
+        ):
+            query = by_name[name]["query"]
+            self.assertIn("distinctcount(flow_id)", query, name)
+            for dimension in dimensions:
+                self.assertIn(dimension, query, name)
+        self.assertEqual(by_name["Policy changes over time"]["visualization_type"], "line")
+        self.assertIn("record_type = 'zpr_policy_drift'", by_name["Policy changes over time"]["query"])
+
+    def test_flow_reject_labels_do_not_claim_zpr_verdicts(self):
+        by_name = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}
+        self.assertIn("KPI: Flow Log REJECT tuples", by_name)
+        self.assertNotIn("Blocked flows", by_name)
+        detection = by_name["Detection: Flow Log REJECT to protected destination"]
+        self.assertIn("FLOW-REJECT-PROTECTED-DESTINATION", detection["query"])
+        self.assertNotIn("ZPR-Blocked-Protected", detection["query"])
+        self.assertIn("not a ZPR verdict", by_name["KPI: Flow Log REJECT tuples"]["description"])
+
+    def test_active_policy_kpi_uses_each_policy_latest_observation(self):
+        query = {w["name"]: w for w in dashboard.iter_widgets(self.dash)}["Active ZPR policies"]["query"]
+        self.assertIn("latest(policy_lifecycle_state)", query)
+        self.assertIn("current_policy_lifecycle_state = 'ACTIVE'", query)
 
     def test_flow_decision_tables_carry_enforcement_honesty_qualifiers(self):
         # zpr_attribution is always INFERRED_NOT_PROVIDER_VERDICT: ZPR emits no
