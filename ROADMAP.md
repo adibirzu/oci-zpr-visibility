@@ -101,7 +101,7 @@ guide. These are product design references, not claims of feature parity.
 ## Current release gates (October 2, 2026)
 
 - Latest `orm-stack.zip` SHA-256:
-  `02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`.
+  `73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422`.
 - The active Resource Manager stack's last uploaded ZIP was
   `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`; its
   plan succeeded with 5 adds, 5 changes and 4 destroys, but is unapplied. The

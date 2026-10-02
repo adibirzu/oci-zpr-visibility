@@ -2,12 +2,12 @@
 
 ## Current verdict
 
-**October 2, 2026 local gate:** 184 tests pass, pure-core coverage is 87.82%,
+**October 2, 2026 local gate:** 186 tests pass, pure-core coverage is 87.82%,
 all three Terraform roots format and validate, Actionlint is clean, and the
 release archive parity check passes. The regenerated offline Marketplace
 payload also passes its SHA-256 manifest and CycloneDX JSON checks. The current
 `orm-stack.zip` SHA-256 is
-`02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`.
+`73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422`.
 These are local checks; no new upload, Resource Manager plan/apply/destroy,
 live ingestion, image launch, or Marketplace acceptance was performed.
 
@@ -23,7 +23,7 @@ in-place updates to the route table, dynamic group, IAM policy, state bucket,
 and ZPR policy. The endpoint instances are not planned for replacement. The
 plan has not been applied; the exact action set still needs current approval.
 No destroy was run. The current local ZIP is SHA-256
-`02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e` and is not
+`73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422` and is not
 the uploaded artifact. The historical plan does not cover this newer ZIP;
 upload it and create/review a fresh plan before any apply.
 
@@ -51,6 +51,11 @@ upload it and create/review a fresh plan before any apply.
    ZPR policy normalization. It does not propose endpoint instance replacement.
    These changes are not approved by the historical plan token; obtain approval
    tied to the latest exact plan before applying.
+   The current source also fingerprints endpoint bootstrap scripts and binds
+   content changes to endpoint replacement, so an upgrade cannot leave old
+   first-boot listeners silently active. The replacement action set for the
+   current ZIP has not been provider-planned or applied; review exact endpoint
+   replacements in a fresh RM plan before approval.
 5. **P2 — Marketplace image readiness is separate.** The image bundle/Packer
    source is code-backed only. No image build, sanitation/vulnerability scan,
    private launch acceptance, publisher review or Oracle Marketplace

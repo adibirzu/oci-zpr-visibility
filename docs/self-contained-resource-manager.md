@@ -119,7 +119,7 @@ The active stack's last uploaded ZIP had SHA-256
 October 1, 2026 plan succeeded with five additions, five changes and four
 destroys, including controller/subnet replacement, IGW removal/NAT creation,
 and related IAM/storage/ZPR metadata changes. It remains unapplied. The current
-local ZIP is `02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`;
+local ZIP is `73f5db0c9ddff36d4e0c71cec34a3aff54eca063d8d3222b4864699e4abfa422`;
 it has not been uploaded or planned, so the earlier plan must not be applied to
 it. Upload the exact current artifact and review a fresh plan first. Marketplace
 image sanitation, launch testing, publisher eligibility and Oracle acceptance

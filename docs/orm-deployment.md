@@ -146,10 +146,10 @@ before classifying the result; a flow-log rejection alone does not establish a
 provider-confirmed ZPR denial.
 
 Cloud-init user data is first-boot configuration. Updating Terraform metadata
-does not rerun it on existing endpoint instances. A stack upgrade that changes
-the listener or traffic generator must therefore use an explicitly reviewed
-endpoint replacement or an approved in-place instance-agent reconfiguration;
-do not claim the new traffic scenario is active based on a changed plan input.
+does not rerun it on existing endpoint instances. The stack hashes each
+endpoint bootstrap script and plans replacement when listener or traffic
+configuration changes. Review those endpoint replacements in the exact plan;
+do not treat a changed plan input as proof that the traffic scenario is active.
 
 After a cold start, Oracle Cloud Agent can take several minutes to report the
 Run Command plugin. A private endpoint without a Service Gateway route cannot
