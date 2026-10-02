@@ -76,10 +76,10 @@ Terraform variables.
 
 Keep `installation_id` stable for upgrades. Dashboard updates require the
 ownership journal's exact IDs/tags. Shared/native fields and saved searches
-referenced by foreign dashboards are preserved. When the operator cannot
-prove a complete cross-compartment dashboard-reference scan, saved searches
-are preserved rather than deleted; review the machine-readable cleanup result
-before teardown. Same-name foreign content,
+are preserved. Saved searches are always retained because this cleanup path
+does not perform a verifiable tenancy-wide, cross-compartment dashboard
+reference scan. Review the `preserved_saved_searches` count in the
+machine-readable cleanup result before teardown. Same-name foreign content,
 missing ownership, ambiguous inventory, and unknown state-bucket objects fail
 closed. Legacy content is not adopted automatically.
 

@@ -21,6 +21,8 @@ def owned_response(getter, journal, entry, compartment, *, tagged=True):
 
 
 def cleanup(journal, la, md, compartment, *, execute=False, complete_reference_scan=False):
+    if complete_reference_scan:
+        raise ValueError("cross-compartment reference scan is unsupported; saved searches are preserved")
     plan = []
     preserved = 0
     from .deploy_dashboard import dashboard_inventory
@@ -37,13 +39,6 @@ def cleanup(journal, la, md, compartment, *, execute=False, complete_reference_s
                 entry["identity"] = matches[0].id
             else:
                 entry["deleted"] = True
-    owned_dashboards = {e["identity"] for e in journal.data["resources"].values()
-        if e["kind"] == "dashboard" and e["created"] and e["identity"] and not e["deleted"]}
-    foreign_references = set()
-    for dashboard in dashboards:
-        if dashboard.dashboard_id not in owned_dashboards:
-            actual = md.get_management_dashboard(dashboard.dashboard_id).data
-            foreign_references.update(tile.saved_search_id for tile in (actual.tiles or []) if tile.saved_search_id)
     preserved_searches = 0
     for entry in journal.data["resources"].values():
         if entry["kind"] == "field":
@@ -62,27 +57,10 @@ def cleanup(journal, la, md, compartment, *, execute=False, complete_reference_s
             response = owned_response(md.get_management_dashboard, journal, entry, compartment)
             delete = lambda e=entry, r=response: md.delete_management_dashboard(e["identity"], if_match=r.headers["etag"])
         elif kind == "saved_search":
-            # A local-compartment dashboard listing cannot prove that another
-            # compartment does not reference this shared search. Fail closed.
-            if not complete_reference_scan or entry["identity"] in foreign_references:
-                preserved_searches += 1
-                continue
-            try:
-                response = owned_response(md.get_management_saved_search, journal, entry, compartment)
-            except oci.exceptions.ServiceError as exc:
-                if exc.status != 404:
-                    raise
-                list_searches = getattr(md, "list_management_saved_searches", None)
-                if list_searches is None:
-                    raise ValueError("saved-search absence cannot be verified with available API") from None
-                searches = oci.pagination.list_call_get_all_results(
-                    list_searches, compartment_id=compartment, limit=200
-                ).data
-                if any(search.id == entry["identity"] for search in searches):
-                    raise ValueError("saved-search lookup returned 404 but inventory still contains it") from None
-                entry["deleted"] = True
-                continue
-            delete = lambda e=entry, r=response: md.delete_management_saved_search(e["identity"], if_match=r.headers["etag"])
+            # Saved searches can be referenced across compartments. The current
+            # API path does not carry a verifiable tenancy-wide reference scan.
+            preserved_searches += 1
+            continue
         elif kind == "source":
             getter = lambda name: la.get_source(journal.ns, name, compartment_id=compartment)
             try:
@@ -140,7 +118,7 @@ def cleanup(journal, la, md, compartment, *, execute=False, complete_reference_s
         journal.save()
     return {"execute": execute, "cleanup_complete": True,
             "owned_content": len(plan), "preserved_shared_fields": preserved,
-            "preserved_referenced_searches": preserved_searches}
+            "preserved_saved_searches": preserved_searches}
 
 
 def main(argv=None):

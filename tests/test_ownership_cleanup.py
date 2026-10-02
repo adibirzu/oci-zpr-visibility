@@ -95,10 +95,22 @@ def test_saved_search_is_preserved_without_complete_cross_compartment_scan():
     md.list_management_dashboards.return_value = NS(data=NS(items=[]), headers={})
     ledger = journal({"saved": entry("saved_search", "search-id")})
     result = cleanup(ledger, Mock(), md, "scope", execute=True)
-    assert result["preserved_referenced_searches"] == 1
+    assert result["preserved_saved_searches"] == 1
     md.get_management_saved_search.assert_not_called()
     md.delete_management_saved_search.assert_not_called()
     md.delete_management_dashboard.assert_not_called()
+
+
+def test_cleanup_rejects_unverified_complete_reference_scan_override():
+    md, la = Mock(), Mock()
+    md.list_management_dashboards.return_value = NS(data=NS(items=[]), headers={})
+    md.get_management_saved_search.return_value = NS(data=tagged(), headers={"etag": "s"})
+    ledger = journal({"saved": entry("saved_search", "search-id")})
+
+    with pytest.raises(ValueError, match="cross-compartment reference scan is unsupported"):
+        cleanup(ledger, la, md, "scope", execute=True, complete_reference_scan=True)
+
+    md.delete_management_saved_search.assert_not_called()
 
 
 def test_failed_parser_creation_is_absent_only_after_authorized_inventory():
