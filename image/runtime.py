@@ -8,7 +8,7 @@ def main():
         import os
         os.environ.setdefault(
             "OCI_ZPR_DASHBOARD_PATH",
-            "/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json",
+            "/opt/zpr-visibility/log_analytics/dashboards/oci_zpr_visibility_dashboard.json",
         )
         from oci_zpr_visibility.controller_runtime import main as controller_main
         return controller_main(sys.argv[1:])

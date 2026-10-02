@@ -21,6 +21,33 @@ class CorrelateTests(unittest.TestCase):
         snapshot["resources"][1]["resource_id"] = "vcn-other"
         self.assertFalse(correlate_flow_records([flow], snapshot, policy)[0]["matched_expected_policy"])
 
+    def test_scoped_policy_after_nonmatching_policy_does_not_crash(self):
+        snapshot = {"resources": [
+            {"resource_type": "Vcn", "resource_id": "vcn-a",
+             "normalized_security_attributes": {"networks": "prod"}},
+        ], "ip_resource_map": [
+            {"private_ip": "10.0.0.1", "vcn_id": "vcn-a",
+             "normalized_security_attributes": {"apps.role": "web"}},
+            {"private_ip": "10.0.0.2", "vcn_id": "vcn-a",
+             "normalized_security_attributes": {"apps.role": "db"}},
+        ]}
+        policies = [
+            {"policy_id": "nonmatch", "policy_lifecycle_state": "ACTIVE",
+             "source_attribute": "apps:other", "destination_attribute": "apps:db",
+             "target_type": "attribute"},
+            {"policy_id": "scoped-match", "policy_lifecycle_state": "ACTIVE",
+             "source_vcn_scope": "networks:prod", "destination_vcn_scope": "networks:prod",
+             "source_attribute": "apps:web", "destination_attribute": "apps:db",
+             "target_type": "attribute"},
+        ]
+        flow = {"data": {"sourceAddress": "10.0.0.1", "destinationAddress": "10.0.0.2",
+                         "action": "ACCEPT"}}
+
+        record = correlate_flow_records([flow], snapshot, policies)[0]
+
+        self.assertTrue(record["matched_expected_policy"])
+        self.assertEqual(record["matched_policy_id"], "scoped-match")
+
     def test_capture_context_does_not_resolve_ambiguous_peer(self):
         snapshot = {"ip_resource_map": [
             {"private_ip": "10.0.0.1", "vnic_id": "local", "vcn_id": "a", "resource_id": "source"},

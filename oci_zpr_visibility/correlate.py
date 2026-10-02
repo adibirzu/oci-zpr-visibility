@@ -130,10 +130,10 @@ def _expected(
                 continue
             if destination_scope and destination.get("vcn_id") != destination_vcn:
                 continue
-        source = policy.get("source_attribute")
-        destination = policy.get("destination_attribute")
-        if source:
-            source_ok = attribute_matches_reference(src_attrs, str(source))
+        source_attribute = policy.get("source_attribute")
+        destination_attribute = policy.get("destination_attribute")
+        if source_attribute:
+            source_ok = attribute_matches_reference(src_attrs, str(source_attribute))
         elif policy.get("source_type") == "cidr":
             source_ok = _address_matches(source_ip, policy.get("source_cidrs"), networks=True)
         elif policy.get("source_type") == "ip":
@@ -141,8 +141,8 @@ def _expected(
         else:
             source_ok = policy.get("source_type") == "all_endpoints"
         target_type = policy.get("target_type")
-        if destination:
-            destination_ok = attribute_matches_reference(dst_attrs, str(destination))
+        if destination_attribute:
+            destination_ok = attribute_matches_reference(dst_attrs, str(destination_attribute))
         elif target_type == "cidr":
             destination_ok = _address_matches(
                 destination_ip, policy.get("destination_cidrs") or policy.get("cidrs"), networks=True
