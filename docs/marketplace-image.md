@@ -79,6 +79,13 @@ shape/image capacity, exact build inputs, reviewed resource costs, and cleanup
 authority for Packer's temporary instance/boot volume. Do not add public SSH
 ingress to make a build work. No builder was launched during local validation.
 
+Use the Packer archive matching the validation host's operating system and
+architecture, and verify it against HashiCorp's published checksum file. CI
+uses the Linux AMD64 archive; it cannot run on macOS. Use a platform-specific
+`PACKER_PLUGIN_PATH` when initializing plugins. A `cannot execute binary file`
+error from the wrong archive is a host/tool mismatch, not a Packer-template
+failure.
+
 The offline image payload was built and hash-checked locally on October 1,
 2026 (24 runtime/application components; no missing license metadata). Packer
 1.16.1 and Oracle plugin 1.1.2 were checksum-verified in a private temporary
