@@ -112,7 +112,7 @@ def ensure_fields(la, ns, journal=None) -> dict[str, str]:
     """
     m = oci.log_analytics.models
     by_lower = {
-        f.display_name.lower(): f.name
+        f.display_name.lower(): f
         for f in oci.pagination.list_call_get_all_results(
             la.list_fields, namespace_name=ns, limit=2000
         ).data
@@ -122,9 +122,15 @@ def ensure_fields(la, ns, journal=None) -> dict[str, str]:
     for token in FIELD_TOKENS:
         key = FIELD_DISPLAY_NAMES.get(token, token).lower()
         if key in by_lower:
-            mapping[token] = by_lower[key]
+            existing = by_lower[key]
+            if token in FIELD_DATA_TYPES and str(getattr(existing, "data_type", "")).upper() != FIELD_DATA_TYPES[token]:
+                raise RuntimeError(
+                    f"existing Log Analytics field {key} has incompatible data type; "
+                    "perform a separately reviewed field migration"
+                )
+            mapping[token] = existing.name
             if journal:
-                journal.record("field", token, by_lower[key], created=False)
+                journal.record("field", token, existing.name, created=False)
             reused_n += 1
             continue
         if token in FIELD_DISPLAY_NAMES:
@@ -139,7 +145,7 @@ def ensure_fields(la, ns, journal=None) -> dict[str, str]:
             # Fields are tenancy-shared even when created here; cleanup
             # preserves them because other parsers may adopt them later.
             journal.record("field", token, created.name, created=True)
-        by_lower[key] = created.name
+        by_lower[key] = created
         created_n += 1
         _say(f"  field created: {token} -> {created.name}")
     _say(f"fields ready: {len(mapping)} (created {created_n}, reused {reused_n})")
@@ -333,6 +339,17 @@ def main(argv: list[str] | None = None) -> int:
         entry = journal.get("log_group", args.log_group_name)
         if not entry or not entry["identity"] or entry["deleted"]:
             raise ValueError("owned ingestion group unavailable")
+        group = la.get_log_analytics_log_group(ns, entry["identity"]).data
+        if (group.compartment_id != target_compartment_id or
+                (group.freeform_tags or {}).get("zpr-installation") != journal.installation):
+            raise ValueError("owned ingestion group verification failed")
+        suffix = args.installation_id.replace("-", "_")
+        source_entry = journal.get("source", f"zpr_{suffix}_source")
+        if not source_entry or not source_entry["identity"] or source_entry["deleted"]:
+            raise ValueError("owned ingestion source unavailable")
+        source = la.get_source(ns, source_entry["identity"], compartment_id=target_compartment_id).data
+        if source.description != f"ZPR visibility installation={journal.installation}":
+            raise ValueError("owned ingestion source verification failed")
         return upload_records(la, ns, entry["identity"], args.upload, source_display)
     field_map = ensure_fields(la, ns, journal)
     lg_id = ensure_log_group(la, ns, target_compartment_id, args.log_group_name, journal)

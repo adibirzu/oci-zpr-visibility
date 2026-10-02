@@ -48,7 +48,7 @@ def run(cfg, action):
     with contextlib.redirect_stdout(output):
         rc = refresh.main(args)
     result = json.loads(output.getvalue())
-    if rc or (cfg["flow_log_id"] and result["flows"] == 0):
+    if rc or (action == "bootstrap" and cfg["flow_log_id"] and result["flows"] == 0):
         raise RuntimeError("collection incomplete; uploaded partial evidence but not ready")
     # Query/indexing is asynchronous. Retry boundedly without uploading another run.
     for attempt in range(8):
@@ -75,7 +75,7 @@ def main(argv=None):
         from .logutil import describe_exception
         status.write_text(json.dumps({"ready": False, "stage": args.action,
                                       "error": describe_exception(exc)}) + "\n")
-        raise
+        raise RuntimeError("controller operation failed; see sanitized status") from None
     status.write_text(json.dumps({"ready": True, "stage": args.action, **result}) + "\n")
     return 0
 

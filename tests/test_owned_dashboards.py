@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from oci_zpr_visibility.deploy_dashboard import reconcile_owned_dashboards
+from oci_zpr_visibility.deploy_dashboard import reconcile_owned_dashboards, record_dashboard_searches
 
 
 class Journal:
@@ -66,3 +66,13 @@ def test_tag_alone_without_journal_does_not_adopt():
     with pytest.raises(ValueError, match="foreign"):
         reconcile_owned_dashboards(Mock(), [{"displayName": "view"}], "scope", Journal(),
             inventory=lambda: [dashboard()])
+
+
+def test_dashboard_tile_saved_search_ids_are_verified_and_journaled():
+    md, journal = Mock(), Journal()
+    md.get_management_dashboard.return_value.data = SimpleNamespace(tiles=[
+        SimpleNamespace(saved_search_id="search-a"), SimpleNamespace(saved_search_id=None)])
+    md.get_management_saved_search.return_value.data = SimpleNamespace(
+        compartment_id="scope", freeform_tags={"zpr-installation": "test-install"})
+    record_dashboard_searches(md, "owned", "scope", journal)
+    assert journal.get("saved_search", "search-a")["identity"] == "search-a"

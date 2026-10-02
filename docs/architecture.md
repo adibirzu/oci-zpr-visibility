@@ -151,9 +151,11 @@ Record types (discriminator `record_type`) and their fields are specified in
 
 ## 7. Detection / dashboard model
 
-Dashboard suite `OCI ZPR Visibility` — 7 focused dashboards / 40 widgets (KPI
-tiles, severity sunburst, flow trends and Link analysis, policy/resource/drift
-tables, detections, explicit resource coverage, and collection health).
+Dashboard suite `OCI ZPR Visibility` — 7 focused dashboards / 43 widgets:
+KPI tiles, severity sunburst, flow trends, distinct-flow-pair/protocol analysis,
+observed Flow Log paths, modeled policy relationships, policy drift over time,
+policy/resource/drift tables, detections, explicit resource coverage, and
+collection health.
 `deploy_dashboard.build_management_dashboards` maps each logical view to an OCI
 Management Dashboard and each widget to a saved search modelled on a working OCI
 LA export:

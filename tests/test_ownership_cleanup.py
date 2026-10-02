@@ -88,6 +88,16 @@ def test_pending_creation_blocks_cleanup_without_deleting_other_content():
     md.list_management_dashboards.return_value = NS(data=NS(items=[]), headers={})
     with pytest.raises(ValueError, match="pending"):
         cleanup(journal({"pending": entry("dashboard", None)}), Mock(), md, "scope", execute=True)
+
+
+def test_saved_search_is_preserved_without_complete_cross_compartment_scan():
+    md = Mock()
+    md.list_management_dashboards.return_value = NS(data=NS(items=[]), headers={})
+    ledger = journal({"saved": entry("saved_search", "search-id")})
+    result = cleanup(ledger, Mock(), md, "scope", execute=True)
+    assert result["preserved_referenced_searches"] == 1
+    md.get_management_saved_search.assert_not_called()
+    md.delete_management_saved_search.assert_not_called()
     md.delete_management_dashboard.assert_not_called()
 
 

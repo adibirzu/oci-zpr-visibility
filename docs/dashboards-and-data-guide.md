@@ -11,22 +11,25 @@ collection coverage, and review context; it does not replace either tool.
 ## Current dashboard surface
 
 The current release candidate provisions seven OCI Log Analytics Management
-Dashboard views with 40 widgets:
+Dashboard views with 43 widgets:
 
 | View | Operator question | Data used |
 |---|---|---|
 | Executive posture | What changed in the selected scope, and is collection current? | Latest inventory, findings, run health |
 | Policy inventory | Which policy statements and endpoint scopes were collected? | Parsed policy-statement records |
 | Resource coverage | Which supported resources are protected, and where are coverage gaps? | Resource and coverage records |
-| Flow review | Which observed flows merit investigation against modeled policy intent? | VCN Flow Logs enriched with collected inventory and policies |
-| Drift governance | Which collected policy statements changed between snapshots? | Snapshot-derived policy drift records |
+| Flow review | Which observed flows merit investigation against modeled policy intent? | VCN Flow Logs enriched with collected inventory and policies; distinct flow IDs by endpoint pair and protocol |
+| Drift governance | Which collected policy statements changed between snapshots, and when? | Snapshot-derived policy drift records and event-time trend |
 | Detections | Which posture and flow-review conditions need operator attention? | Findings and explicitly labeled review classifications |
 | Collection health | Which calls or stages failed, and how fresh is the latest run? | Run, collection-gap, and coverage records |
 
-The dashboard definitions and saved-search catalog are code-backed. A rendered
-dashboard, populated data, current freshness, and successful drilldowns require
-separate live validation; see [validation.md](validation.md) and the lifecycle
-status in [resource-manager-lifecycle-review.md](resource-manager-lifecycle-review.md).
+The current suite contains 43 widgets across seven focused views. The flow-pair
+and protocol charts count distinct `flow_id` values where available, under the
+selected time and compartment filters. Flow Log `ACCEPT`/`REJECT` actions are
+observations, not ZPR verdicts. The dashboard definitions and saved-search
+catalog are code-backed; new queries still require live Log Analytics parsing
+and execution before visual acceptance. See [validation.md](validation.md) and
+the lifecycle status in [resource-manager-lifecycle-review.md](resource-manager-lifecycle-review.md).
 
 ## How project data is collected and used
 

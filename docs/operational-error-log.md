@@ -1,4 +1,4 @@
-# Operational errors and resolutions — October 1, 2026
+# Operational errors and resolutions — October 2, 2026
 
 This is a sanitized operator note. It contains no tenant/resource identifiers,
 private addresses, saved plans or raw provider output.
@@ -15,13 +15,15 @@ private addresses, saved plans or raw provider output.
 | RM plan's lifecycle precondition says OCI CLI is available but Resource Principal is unavailable | Resource Manager's Terraform worker did not expose authenticated CLI Resource Principal context to the external/local-exec process. The plan calculated 5 adds, 5 changes and 4 destroys, then failed closed. | Removed `hashicorp/external` and all job-side CLI hooks. Verify readiness and perform ownership-checked cleanup from an operator machine using a named OCI CLI profile and the sensitive lifecycle output. The corrected-source plan succeeded; no apply was run. |
 | `oci resource-manager stack update --config-source file://...` cannot resolve the local ZIP | `--config-source` expects a local ZIP path for this stack source update, not the OCI CLI `file://` complex-parameter convention. | Pass the absolute local ZIP path. Re-read the exact named stack and require `ACTIVE`/`ZIP_UPLOAD` before updating; then create a fresh plan. |
 | pip warns that the default user cache is unwritable in the managed macOS workspace | The home cache path is owned/protected by the environment. pip disables its cache automatically; the wheel download still completed. | Set `PIP_NO_CACHE_DIR=1` for the isolated Linux wheelhouse/build. No privilege escalation is needed. |
+| A local `pip install --require-hashes` selected a macOS ARM wheel whose hash is not in the runtime lock | The release lock is admitted for the pinned Linux CI platform, while local pip selected a different platform wheel. This does not establish a bad lock or a CI failure. | For artifact work on macOS, resolve the locked Linux wheelhouse explicitly with `--implementation cp --python-version 311 --abi cp311 --platform manylinux2014_x86_64`; the offline image payload and checksums then pass. Do not install that Linux wheelhouse into the macOS venv or call it a full runtime installation test. |
 | The initial image inventory marked the project wheel and `wheel` package license as `REVIEW_REQUIRED` | The project had no explicit license declaration, and wheel is a packaging-only tool rather than a runtime dependency. | Added the Apache-2.0 project license metadata/file, moved setuptools/wheel into a build-only lock, and made image packaging fail when any component has no license metadata. The regenerated bundle reports zero missing license metadata; publisher legal review remains required. |
 | Directly importing `build_image_bundle.py` in pytest could not find `build_collector_archive` | The script assumed Python's command-line script directory was on `sys.path`, which is not true for importlib-based tests. | Made the image payload descriptor allowlist explicit in the builder; its asset allowlist test passes and excludes Packer/install scripts and bytecode caches. |
 | Packer checksum verification reported the downloaded archive missing | `shasum --check` resolved the checksum manifest's filename relative to the repository working directory, not the download directory. | Run checksum verification from the private download directory and map the manifest filename to the locally saved archive name. Packer 1.16.1/plugin 1.1.2 then validated without OCI access. |
 
 The failed plan is not an apply failure: it made no infrastructure changes.
-The October 1 source-matched plan for uploaded ZIP SHA-256
+At the time of the October 1 review, the source-matched plan for uploaded ZIP SHA-256
 `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039` succeeded
-with 5 adds, 5 changes and 4 destroys. It remains unapplied. The current local
-ZIP is `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd` and
-has not been uploaded or planned; create a fresh exact-source plan before apply.
+with 5 adds, 5 changes and 4 destroys. It remains unapplied. That review's local
+ZIP was `db2549ccf20334e421c7abb6edc2b0157617416b65fa76c5a8ac873c8bdc25b3` and
+was not uploaded or planned; the newer October 2 artifact is tracked in the
+current lifecycle review and also requires a fresh exact-source plan before apply.

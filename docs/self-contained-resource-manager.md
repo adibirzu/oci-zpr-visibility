@@ -76,7 +76,10 @@ Terraform variables.
 
 Keep `installation_id` stable for upgrades. Dashboard updates require the
 ownership journal's exact IDs/tags. Shared/native fields and saved searches
-referenced by foreign dashboards are preserved. Same-name foreign content,
+referenced by foreign dashboards are preserved. When the operator cannot
+prove a complete cross-compartment dashboard-reference scan, saved searches
+are preserved rather than deleted; review the machine-readable cleanup result
+before teardown. Same-name foreign content,
 missing ownership, ambiguous inventory, and unknown state-bucket objects fail
 closed. Legacy content is not adopted automatically.
 
@@ -116,7 +119,7 @@ The active stack's last uploaded ZIP had SHA-256
 October 1, 2026 plan succeeded with five additions, five changes and four
 destroys, including controller/subnet replacement, IGW removal/NAT creation,
 and related IAM/storage/ZPR metadata changes. It remains unapplied. The current
-local/GitHub ZIP is `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd`;
+local ZIP is `02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`;
 it has not been uploaded or planned, so the earlier plan must not be applied to
 it. Upload the exact current artifact and review a fresh plan first. Marketplace
 image sanitation, launch testing, publisher eligibility and Oracle acceptance

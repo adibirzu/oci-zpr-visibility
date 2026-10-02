@@ -1,5 +1,6 @@
 """Marketplace image delegates to the tested common controller runtime."""
 import importlib.util
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,10 +11,13 @@ spec.loader.exec_module(runtime)
 
 def test_image_runtime_delegates_bootstrap_and_readiness(monkeypatch):
     from oci_zpr_visibility import controller_runtime
+    monkeypatch.delenv("OCI_ZPR_DASHBOARD_PATH", raising=False)
     monkeypatch.setattr(runtime.sys, "argv", ["runtime", "bootstrap"])
     with patch.object(controller_runtime, "main", return_value=0) as main:
         assert runtime.main() == 0
     main.assert_called_once_with(["bootstrap"])
+    assert os.environ["OCI_ZPR_DASHBOARD_PATH"].endswith(
+        "log_analytics/dashboards/oci_zpr_visibility_dashboard.json")
 
 
 def test_image_runtime_delegates_refresh(monkeypatch):

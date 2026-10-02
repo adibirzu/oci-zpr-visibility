@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-exec > /var/log/zpr-controller.log 2>&1
 umask 077
+touch /var/log/zpr-controller.log
+chmod 0600 /var/log/zpr-controller.log
+exec > /var/log/zpr-controller.log 2>&1
 install -d -m 0750 /etc/zpr-visibility /var/lib/zpr-visibility /opt/zpr-visibility
 printf '%s' '${runtime_config}' | base64 -d >/etc/zpr-visibility/config.json
 printf '%s' '${runtime_lock}' | base64 -d >/etc/zpr-visibility/requirements.lock
@@ -54,6 +56,12 @@ Path("/opt/zpr-visibility/pkg.tgz").write_bytes(payload)
 PY
 install -d -m 0750 /opt/zpr-visibility/package
 tar xzf /opt/zpr-visibility/pkg.tgz -C /opt/zpr-visibility/package
+install -d -m 0750 /opt/zpr-visibility/build-tools
+/opt/zpr-visibility/venv/bin/pip download --require-hashes --only-binary=:all: \
+  --dest /opt/zpr-visibility/build-tools \
+  -r /opt/zpr-visibility/package/requirements-build.lock
+/opt/zpr-visibility/venv/bin/pip install --no-index --find-links /opt/zpr-visibility/build-tools \
+  --require-hashes -r /opt/zpr-visibility/package/requirements-build.lock
 /opt/zpr-visibility/venv/bin/pip install --no-deps --no-build-isolation /opt/zpr-visibility/package
 export OCI_ZPR_DASHBOARD_PATH=/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
 /opt/zpr-visibility/venv/bin/python -m oci_zpr_visibility.controller_runtime bootstrap

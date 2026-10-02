@@ -56,16 +56,15 @@ def attribute_matches_reference(attributes: dict[str, str], reference: str) -> b
 
     if ":" in normalized:
         left, value = normalized.rsplit(":", 1)
-        if attributes.get(left) == value:
-            return True
+        if left in attributes:
+            return attributes[left] == value
         # An unqualified reference may match a local attribute name or a
         # namespace prefix, but it must resolve to exactly one namespaced key.
         # Otherwise a policy could be attributed to the wrong namespace.
         candidates = [
-            key for key, candidate_value in attributes.items()
-            if candidate_value == value
-            and (key.rsplit(".", 1)[-1] == left or key.split(".", 1)[0] == left)
+            key for key in attributes
+            if key.rsplit(".", 1)[-1] == left or key.split(".", 1)[0] == left
         ]
-        return len(candidates) == 1
+        return len(candidates) == 1 and attributes[candidates[0]] == value
 
     return normalized in attributes or normalized in attributes.values()

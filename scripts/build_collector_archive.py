@@ -14,10 +14,12 @@ DESCRIPTORS = ("log_analytics/dashboards/oci_zpr_visibility_dashboard.json",
 def build_archive(root: Path, output: Path) -> None:
     # Only importable modules and reviewed descriptors belong in this package.
     # Do not recursively include arbitrary files from source directories.
-    files = [root / "pyproject.toml", root / "README.md", root / "requirements-runtime.lock"]
+    files = [root / "pyproject.toml", root / "README.md", root / "LICENSE",
+             root / "requirements-runtime.lock", root / "requirements-build.lock"]
     files.extend((root / "oci_zpr_visibility").glob("*.py"))
     files.extend(root / name for name in DESCRIPTORS)
-    mandatory = [root / "pyproject.toml", root / "README.md", root / "requirements-runtime.lock",
+    mandatory = [root / "pyproject.toml", root / "README.md", root / "LICENSE",
+                 root / "requirements-runtime.lock", root / "requirements-build.lock",
                  root / "oci_zpr_visibility/__init__.py",
                  *(root / name for name in DESCRIPTORS)]
     if any(not path.is_file() for path in mandatory):

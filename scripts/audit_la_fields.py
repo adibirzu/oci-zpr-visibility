@@ -40,15 +40,16 @@ def main():
     ns = oci.object_storage.ObjectStorageClient(cfg).get_namespace().data
     identity = oci.identity.IdentityClient(cfg)
     users = oci.pagination.list_call_get_all_results(identity.list_users, cfg["tenancy"]).data
-    matches = {"operator": [], **{person: [] for person in args.person}}
+    person_labels = {person: f"person_{index + 1}" for index, person in enumerate(args.person)}
+    matches = {"operator": [], **{label: [] for label in person_labels.values()}}
     for user in users:
         text = " ".join(str(v or "") for v in (user.name, user.description, user.email)).lower()
         labels = []
         if user.id == cfg.get("user"):
             labels.append("operator")
-        for person in args.person:
+        for person, label in person_labels.items():
             if all(keyword in text for keyword in person.lower().split()):
-                labels.append(person)
+                labels.append(label)
         for label in labels:
             matches[label].append({"id": user.id, "name": user.name})
     print("identity_matches", {key: len(value) for key, value in matches.items()}, flush=True)

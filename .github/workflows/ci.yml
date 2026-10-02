@@ -105,7 +105,8 @@ jobs:
           unzip -q "$packer_dir/packer.zip" -d "$packer_dir"
           PACKER_PLUGIN_PATH="$RUNNER_TEMP/packer-plugins" "$packer_dir/packer" init image/zpr.pkr.hcl
           packer_home="$RUNNER_TEMP/packer-home"
-          mkdir -m 700 -p "$packer_home/.oci"
+          mkdir -p "$packer_home/.oci"
+          chmod 700 "$packer_home" "$packer_home/.oci"
           openssl genrsa -out "$packer_home/.oci/validate.pem" 2048 2>/dev/null
           fingerprint="$(openssl rsa -in "$packer_home/.oci/validate.pem" -pubout -outform DER 2>/dev/null | openssl md5 -c | awk '{print $NF}')"
           printf '[DEFAULT]\nuser=ocid1.user.oc1..example\nfingerprint=%s\ntenancy=ocid1.tenancy.oc1..example\nregion=us-ashburn-1\nkey_file=%s\n' \

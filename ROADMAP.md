@@ -23,7 +23,7 @@ Status legend: ✅ done · 🔜 next · 📋 planned · 💡 idea
 
 ## Phase 1 — Hardening & DX (◑ in progress)
 
-- ✅ **Dashboard enhancement** — seven focused native OCI LA dashboards with 40 widgets, flow trends/link analysis, conservative evidence labels, collection health, and explicit resource-coverage gaps.
+- ✅ **Dashboard enhancement** — seven focused native OCI LA dashboards with 43 widgets, flow trends, endpoint/protocol analysis, policy-drift history, conservative Flow Log evidence labels, collection health, and explicit resource-coverage gaps.
 
 Goal: production-quality reliability and contributor onboarding.
 
@@ -98,10 +98,10 @@ Cloud Flow Analyzer, Azure Traffic Analytics, and AWS Network Firewall
 monitoring are mapped to this project's scope and evidence in the dashboard
 guide. These are product design references, not claims of feature parity.
 
-## Current release gates (October 1, 2026)
+## Current release gates (October 2, 2026)
 
 - Latest `orm-stack.zip` SHA-256:
-  `a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd`.
+  `02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`.
 - The active Resource Manager stack's last uploaded ZIP was
   `27bbf67600b763c7fe90444274fc7fb7f4bb9105f3de63ab0439097714eb5039`; its
   plan succeeded with 5 adds, 5 changes and 4 destroys, but is unapplied. The

@@ -24,10 +24,12 @@ RELATION_RE = re.compile(
     re.IGNORECASE,
 )
 VCN_SCOPE_RE = re.compile(
-    r"^(?P<scope>(?:vcn|network)s?:[A-Za-z0-9_.-]+)(?:\s+VCN)?$", re.IGNORECASE
+    r"^(?P<scope>(?:(?:vcn|networks?):[A-Za-z0-9_.-]+(?:\s+VCN)?|"
+    r"[A-Za-z][\w.-]*:[A-Za-z][\w.-]*\s+VCN))$", re.IGNORECASE
 )
 ENDPOINT_SCOPE_RE = re.compile(
-    r"\s+in\s+(?P<scope>(?:vcn|network)s?:[A-Za-z0-9_.-]+)(?:\s+VCN)?$",
+    r"\s+in\s+(?P<scope>(?:vcn|networks?):[A-Za-z0-9_.-]+(?:\s+VCN)?|"
+    r"[A-Za-z][\w.-]*:[A-Za-z][\w.-]*\s+VCN)$",
     re.IGNORECASE,
 )
 
@@ -122,14 +124,14 @@ def _scope_reference(text: str | None) -> str | None:
     if not text:
         return None
     match = VCN_SCOPE_RE.fullmatch(text.strip())
-    return match.group("scope") if match else None
+    return match.group("scope").removesuffix(" VCN") if match else None
 
 
 def _endpoint_and_scope(text: str) -> tuple[str, str | None]:
     match = ENDPOINT_SCOPE_RE.search(text)
     if not match:
         return text, None
-    return text[:match.start()].strip(), match.group("scope")
+    return text[:match.start()].strip(), match.group("scope").removesuffix(" VCN")
 
 
 def _endpoint_type(text: str, attributes: list[str], cidrs: tuple[str, ...], ips: tuple[str, ...]) -> str:

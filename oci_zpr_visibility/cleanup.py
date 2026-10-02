@@ -20,7 +20,7 @@ def owned_response(getter, journal, entry, compartment, *, tagged=True):
     return response
 
 
-def cleanup(journal, la, md, compartment, *, execute=False):
+def cleanup(journal, la, md, compartment, *, execute=False, complete_reference_scan=False):
     plan = []
     preserved = 0
     from .deploy_dashboard import dashboard_inventory
@@ -62,10 +62,26 @@ def cleanup(journal, la, md, compartment, *, execute=False):
             response = owned_response(md.get_management_dashboard, journal, entry, compartment)
             delete = lambda e=entry, r=response: md.delete_management_dashboard(e["identity"], if_match=r.headers["etag"])
         elif kind == "saved_search":
-            if entry["identity"] in foreign_references:
+            # A local-compartment dashboard listing cannot prove that another
+            # compartment does not reference this shared search. Fail closed.
+            if not complete_reference_scan or entry["identity"] in foreign_references:
                 preserved_searches += 1
                 continue
-            response = owned_response(md.get_management_saved_search, journal, entry, compartment)
+            try:
+                response = owned_response(md.get_management_saved_search, journal, entry, compartment)
+            except oci.exceptions.ServiceError as exc:
+                if exc.status != 404:
+                    raise
+                list_searches = getattr(md, "list_management_saved_searches", None)
+                if list_searches is None:
+                    raise ValueError("saved-search absence cannot be verified with available API") from None
+                searches = oci.pagination.list_call_get_all_results(
+                    list_searches, compartment_id=compartment, limit=200
+                ).data
+                if any(search.id == entry["identity"] for search in searches):
+                    raise ValueError("saved-search lookup returned 404 but inventory still contains it") from None
+                entry["deleted"] = True
+                continue
             delete = lambda e=entry, r=response: md.delete_management_saved_search(e["identity"], if_match=r.headers["etag"])
         elif kind == "source":
             getter = lambda name: la.get_source(journal.ns, name, compartment_id=compartment)
@@ -118,9 +134,12 @@ def cleanup(journal, la, md, compartment, *, execute=False):
             delete()
             entry["deleted"] = True
             journal.save()
+        # Preserved saved searches are an intentional fail-closed outcome, not
+        # an incomplete destructive operation. The receipt reports the count.
         journal.data["cleanup_complete"] = True
         journal.save()
-    return {"execute": execute, "owned_content": len(plan), "preserved_shared_fields": preserved,
+    return {"execute": execute, "cleanup_complete": True,
+            "owned_content": len(plan), "preserved_shared_fields": preserved,
             "preserved_referenced_searches": preserved_searches}
 
 

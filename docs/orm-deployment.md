@@ -4,12 +4,10 @@ The `orm/` stack provisions the entire ZPR visibility lab **and** its Log
 Analytics content + dashboard in one apply. Build the zip, upload it as a
 Resource Manager stack, and apply.
 
-**Review status (October 1, 2026):** local tests and Terraform validations pass.
-The Resource Manager source no longer assumes job-side Resource Principal CLI
-auth; an operator-authenticated lifecycle check is used after apply and before
-destroy. The current uploaded ZIP is source-matched and its fresh live plan
-succeeded with five adds, five changes, and four destroys. It remains
-unapplied pending approval tied to that exact plan. See the
+**Review status (October 2, 2026):** the previously recorded RM plan is
+historical and does not cover the current local ZIP. The current package must
+be uploaded as a new stack version and receive a fresh plan before any apply.
+Local tests and Terraform validations do not establish provider readiness. See the
 [lifecycle review](resource-manager-lifecycle-review.md) and
 [self-contained RM runbook](self-contained-resource-manager.md).
 
@@ -147,6 +145,12 @@ Flow Log `ACCEPT`/`REJECT` record with the policy and endpoint attributes
 before classifying the result; a flow-log rejection alone does not establish a
 provider-confirmed ZPR denial.
 
+Cloud-init user data is first-boot configuration. Updating Terraform metadata
+does not rerun it on existing endpoint instances. A stack upgrade that changes
+the listener or traffic generator must therefore use an explicitly reviewed
+endpoint replacement or an approved in-place instance-agent reconfiguration;
+do not claim the new traffic scenario is active based on a changed plan input.
+
 After a cold start, Oracle Cloud Agent can take several minutes to report the
 Run Command plugin. A private endpoint without a Service Gateway route cannot
 be managed through that channel. An empty short-window Logging search is a
@@ -195,7 +199,7 @@ uses subtree queries for every widget and the current-run gate.
 
 These source repairs alone do not establish current ingestion, scheduled
 refresh, or fresh indexed allow/reject evidence. Verify the deployed controller,
-then the selected-compartment log group and all 40 widget queries.
+then the selected-compartment log group and all 43 current widget queries.
 
 For the separate baked-dependency image pipeline and open launch/publisher
 gates, see [Compute image delivery](marketplace-image.md).
@@ -246,9 +250,8 @@ verdicts. Collection also emitted one deduplicated gap record, so this is not
 full-resource-family or gap-free acceptance.
 
 An earlier October 1, 2026 plan failed its Resource Principal precondition and
-was not applied. The latest plan for the corrected uploaded source succeeded
-with five adds, five changes, and four destroys, including controller/subnet
-replacement and IGW-to-NAT changes. It remains unapplied until approved for
-that exact action set; a historical plan token is not current approval. The
-live controller's timer/readiness state is unverified; historical Log Analytics
-indexing is not current-run evidence.
+was not applied. A later plan for an earlier uploaded artifact proposed five
+adds, five changes, and four destroys; it remains historical and is not approval
+for this source tree or ZIP. Upload the current artifact and create/review a
+fresh plan before any apply. The live controller's timer/readiness state is
+unverified; historical Log Analytics indexing is not current-run evidence.

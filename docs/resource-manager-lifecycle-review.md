@@ -1,6 +1,15 @@
-# Resource Manager lifecycle review — October 1, 2026
+# Resource Manager lifecycle review — October 2, 2026
 
 ## Current verdict
+
+**October 2, 2026 local gate:** 184 tests pass, pure-core coverage is 87.82%,
+all three Terraform roots format and validate, Actionlint is clean, and the
+release archive parity check passes. The regenerated offline Marketplace
+payload also passes its SHA-256 manifest and CycloneDX JSON checks. The current
+`orm-stack.zip` SHA-256 is
+`02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e`.
+These are local checks; no new upload, Resource Manager plan/apply/destroy,
+live ingestion, image launch, or Marketplace acceptance was performed.
 
 The source now removes the failed Resource Manager job-side authentication
 assumption and provides a private operator readiness/cleanup path. Local
@@ -13,8 +22,8 @@ object; IGW removal and NAT creation; collector revision creation; and
 in-place updates to the route table, dynamic group, IAM policy, state bucket,
 and ZPR policy. The endpoint instances are not planned for replacement. The
 plan has not been applied; the exact action set still needs current approval.
-No destroy was run. The current local/GitHub ZIP is SHA-256
-`a31aa75119f0230855ea4f56d0baacce4c6b29df8a145d96f8d78f58c317dafd` and is not
+No destroy was run. The current local ZIP is SHA-256
+`02eb0961100b976b89cb37c500ae53601598467a6fd1c955c7e1b0625f5c160e` and is not
 the uploaded artifact. The historical plan does not cover this newer ZIP;
 upload it and create/review a fresh plan before any apply.
 

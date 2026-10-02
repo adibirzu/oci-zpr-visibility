@@ -40,7 +40,9 @@ def write_private(config: dict, output: Path) -> None:
         with os.fdopen(fd, "w") as stream:
             json.dump(config, stream, sort_keys=True)
             stream.write("\n")
-        os.replace(temporary, output)
+        # Same-directory hard-link creation is atomic and fails if output
+        # already exists, including a concurrent publisher's file.
+        os.link(temporary, output)
         os.chmod(output, 0o600)
     finally:
         if os.path.exists(temporary):

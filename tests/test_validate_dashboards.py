@@ -31,7 +31,7 @@ def test_freshness_uses_exact_aggregate_instead_of_capped_record_total():
     assert details.compartment_id_in_subtree is True
     assert "stats count as indexed_records" in details.query_string
 
-FLOW_WIDGET = {"name": "KPI: Blocked flows", "data_dependency": dashboard.FLOW_DEPENDENCY}
+FLOW_WIDGET = {"name": "KPI: Flow Log REJECT tuples", "data_dependency": dashboard.FLOW_DEPENDENCY}
 INVENTORY_WIDGET = {"name": "KPI: Active policies"}
 ALLOW_ZERO_WIDGET = {"name": "Collection gaps", "allow_zero": True}
 

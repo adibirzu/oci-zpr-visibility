@@ -22,8 +22,10 @@ def artifacts(tmp_path, monkeypatch):
     (root / "oci_zpr_visibility").mkdir(parents=True)
     (root / "oci_zpr_visibility/__init__.py").write_text("")
     (root / "README.md").write_text("fixture")
+    (root / "LICENSE").write_text("Apache-2.0")
     (root / "pyproject.toml").write_text("fixture")
     (root / "requirements-runtime.lock").write_text("fixture")
+    (root / "requirements-build.lock").write_text("fixture")
     for name in module.build_collector.__globals__["DESCRIPTORS"]:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)

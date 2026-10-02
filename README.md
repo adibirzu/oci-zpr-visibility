@@ -37,11 +37,11 @@ Starter implementation for OCI Zero Trust Packet Routing visibility:
 * Routes VCN Flow Logs to OCI Log Analytics through Connector Hub, and custom ZPR inventory records through the LA Upload API.
 * Collects ZPR configuration, policies, security attributes, protected resources, and IP/resource mappings.
 * Emits normalized policy, resource, finding, enriched flow, drift, coverage, collection-gap, and run-health records.
-* Provides a Log Analytics custom source and a 40-widget Management Dashboard suite across 7 focused views.
+* Provides a Log Analytics custom source and a 43-widget Management Dashboard suite across 7 focused views.
 
 ![OCI ZPR Visibility — Executive posture dashboard](docs/evidence/screenshots/redacted/exec-posture.png)
 
-> *The Executive posture dashboard: active policies, protected resources, critical/high findings, blocked flows, and accepted-for-policy-review KPIs, with the policy statement table below. Live data from a demo tenancy; OCIDs and IPs are masked.*
+> *Historical screenshot from the June 2026 demo: its earlier “Blocked flows” label counted Flow Log REJECT tuples; it did not establish a ZPR verdict. Live-demo identifiers and IPs are masked.*
 
 Oracle’s current ZPR SDK exposes `ZprClient` methods including `create_configuration`, `get_configuration`, `list_zpr_policies`, and `get_zpr_policy`. The OCI Terraform provider exposes `oci_zpr_configuration` to onboard ZPR in the root compartment. VCN Flow Logs expose ACCEPT/REJECT network decisions and fields such as source/destination address, protocol, VNIC OCID, subnet OCID, and compartment OCID; they do not provide a dedicated ZPR deny-reason field, so this project uses explicit policy/resource correlation.
 
@@ -100,10 +100,11 @@ Full design (component diagram, collector internals, detection model, IAM):
 
 ## What the dashboard shows
 
-The Management Dashboard ships as **40 widgets across 7 focused dashboards**:
+The Management Dashboard ships as **43 widgets across 7 focused dashboards**:
 executive posture, policy inventory, protected-resource coverage, flow review,
 drift governance, detections, and collection health. Screenshots below are from
-a live demo tenancy with identifiers and IPs masked.
+a live demo tenancy with identifiers and IPs masked; they predate the latest
+three analysis widgets and remain historical visual evidence.
 
 **Allow / block traffic — real flows correlated against policy intent**
 

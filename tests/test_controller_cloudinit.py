@@ -14,6 +14,9 @@ def test_controller_bootstrap_fails_closed_and_installs_supervised_refresh():
     assert "/usr/bin/flock -n /run/zpr-visibility-refresh.lock" in content
     assert "systemctl enable --now zpr-refresh.timer" in content
     assert "initial-refresh-succeeded" in content
+    assert content.index("umask 077") < content.index("exec > /var/log/zpr-controller.log")
+    assert "chmod 0600 /var/log/zpr-controller.log" in content
+    assert "requirements-build.lock" in content
 
 
 def test_dashboard_and_refresh_share_deployment_scope_and_durable_assets():

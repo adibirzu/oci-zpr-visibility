@@ -73,6 +73,11 @@ class MatchReferenceTests(unittest.TestCase):
         attrs = {"oracle-zpr.app": "web", "other.app": "web"}
         self.assertFalse(attribute_matches_reference(attrs, "app:web"))
 
+    def test_unqualified_reference_resolves_key_before_value(self):
+        self.assertFalse(attribute_matches_reference(
+            {"oracle-zpr.app": "db", "other.app": "web"}, "app:web"))
+        self.assertFalse(attribute_matches_reference({"app": "db", "other.app": "web"}, "app:web"))
+
     def test_bare_membership(self):
         self.assertTrue(attribute_matches_reference(self.attrs, "apps.role"))
         self.assertTrue(attribute_matches_reference(self.attrs, "web"))

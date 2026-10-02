@@ -21,7 +21,9 @@ def test_archive_is_byte_identical_despite_input_mtimes_and_excludes_caches(tmp_
     (root / "log_analytics" / "secret.pem").write_text("SECRET")
     (root / "pyproject.toml").write_text("[project]\n")
     (root / "README.md").write_text("test")
+    (root / "LICENSE").write_text("Apache-2.0")
     (root / "requirements-runtime.lock").write_text("fixture")
+    (root / "requirements-build.lock").write_text("fixture")
     (root / "oci_zpr_visibility/__init__.py").write_text("")
     for name in module.DESCRIPTORS:
         path = root / name
@@ -35,8 +37,9 @@ def test_archive_is_byte_identical_despite_input_mtimes_and_excludes_caches(tmp_
     assert first.stat().st_mtime == second.stat().st_mtime == 946684800
     with tarfile.open(first) as archive:
         assert archive.getnames() == sorted([
-            "README.md", *module.DESCRIPTORS, "oci_zpr_visibility/__init__.py",
-            "oci_zpr_visibility/cli.py", "pyproject.toml", "requirements-runtime.lock"])
+            "LICENSE", "README.md", *module.DESCRIPTORS, "oci_zpr_visibility/__init__.py",
+            "oci_zpr_visibility/cli.py", "pyproject.toml", "requirements-runtime.lock",
+            "requirements-build.lock"])
         assert all(member.mtime == 0 for member in archive.getmembers())
     with monkeypatch.context() as patch:
         def fail_archive(*args, **kwargs):

@@ -63,6 +63,9 @@ def main(argv=None) -> int:
     p.add_argument("--quiet", action="store_true", help="suppress target identifiers from command output")
     args = p.parse_args(argv)
 
+    if bool(args.flow_log_group_id) != bool(args.flow_log_id):
+        p.error("--flow-log-group-id and --flow-log-id must be supplied together")
+
     session = build_session(args.auth, args.config_file, args.profile, args.region)
     run_id = new_run_id()
     collector = ZprCollector(session, args.collection_compartment_id) if args.collection_compartment_id else ZprCollector(session)
@@ -141,15 +144,20 @@ def main(argv=None) -> int:
         prov_argv += ["--config-file", args.config_file]
     if args.quiet:
         prov_argv += ["--quiet"]
-    if args.installation_id and args.upload_only:
-        prov_argv += ["--installation-id", args.installation_id, "--state-bucket", args.state_bucket, "--upload-only"]
+    if args.installation_id:
+        prov_argv += ["--installation-id", args.installation_id, "--state-bucket", args.state_bucket]
+    if args.upload_only:
+        prov_argv += ["--upload-only"]
     try:
         rc = provision_la.main(prov_argv)
     finally:
         # Records can contain tenant inventory and flow details. The upload
         # staging file is intentionally short-lived and must not remain on disk.
         Path(records_path).unlink(missing_ok=True)
-    if rc == 0:
+    strict_collection_failed = bool(
+        args.strict and (collection_error_count or flow_collection_status == FLOW_STATUS_FAILED)
+    )
+    if rc == 0 and not strict_collection_failed:
         # Advance drift state only after the current evidence was accepted for
         # upload. A failed upload must not erase the next run's comparison base.
         save_records(session, args.state_bucket, records)
@@ -171,7 +179,7 @@ def main(argv=None) -> int:
         f"{len(flows)} flows -> uploaded {len(all_records)}, {published} metrics (provision rc={rc})",
         args.json,
     )
-    return rc or (1 if args.strict and (collection_error_count or flow_collection_status == FLOW_STATUS_FAILED) else 0)
+    return rc or (1 if strict_collection_failed else 0)
 
 
 if __name__ == "__main__":

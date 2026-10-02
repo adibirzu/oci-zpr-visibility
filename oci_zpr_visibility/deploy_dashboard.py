@@ -241,6 +241,19 @@ def dashboard_inventory(md, compartment):
         seen.add(page)
 
 
+def record_dashboard_searches(md, dashboard_id, compartment, journal):
+    """Verify and journal saved searches referenced by returned dashboard tiles."""
+    actual = md.get_management_dashboard(dashboard_id).data
+    search_ids = {tile.saved_search_id for tile in (getattr(actual, "tiles", None) or [])
+                  if getattr(tile, "saved_search_id", None)}
+    for search_id in search_ids:
+        search = md.get_management_saved_search(search_id).data
+        if (search.compartment_id != compartment or
+                (search.freeform_tags or {}).get("zpr-installation") != journal.installation):
+            raise ValueError("saved search ownership missing")
+        journal.record("saved_search", search_id, search_id, created=True)
+
+
 def reconcile_owned_dashboards(md, built, compartment, journal, *, inventory=None):
     """Import/update exact owned IDs; journal intent precedes creation.
 
@@ -296,11 +309,7 @@ def reconcile_owned_dashboards(md, built, compartment, journal, *, inventory=Non
             journal.record("dashboard", name, existing.dashboard_id, created=True,
                            revision=(existing.freeform_tags or {}).get("zpr-revision"))
             if (existing.freeform_tags or {}).get("zpr-revision") == revision:
-                searches = getattr(md.get_management_dashboard(existing.dashboard_id).data, "saved_searches", None) or []
-                for search in searches:
-                    if search.compartment_id != compartment or (search.freeform_tags or {}).get("zpr-installation") != journal.installation:
-                        raise ValueError("saved search ownership missing")
-                    journal.record("saved_search", search.id, search.id, created=True)
+                record_dashboard_searches(md, existing.dashboard_id, compartment, journal)
                 continue
         else:
             journal.record("dashboard", name, None, created=True)
@@ -312,11 +321,7 @@ def reconcile_owned_dashboards(md, built, compartment, journal, *, inventory=Non
         if len(matches) != 1:
             raise ValueError("import identity not yet resolvable; retry bootstrap")
         journal.record("dashboard", name, matches[0].dashboard_id, created=True, revision=revision)
-        searches = getattr(md.get_management_dashboard(matches[0].dashboard_id).data, "saved_searches", None) or []
-        for search in searches:
-            if search.compartment_id != compartment or (search.freeform_tags or {}).get("zpr-installation") != journal.installation:
-                raise ValueError("saved search ownership missing")
-            journal.record("saved_search", search.id, search.id, created=True)
+        record_dashboard_searches(md, matches[0].dashboard_id, compartment, journal)
 
 
 def main(argv=None) -> int:
@@ -336,6 +341,13 @@ def main(argv=None) -> int:
     session = build_session(args.auth, args.config_file, args.profile, args.region)
     compartment_id = args.compartment_id or session.tenancy_id
 
+    if args.installation_id:
+        from .ownership import validate_installation
+        from .provision_la import owned_source_name
+        validate_installation(args.installation_id)
+        import os
+        os.environ["OCI_ZPR_SOURCE_NAME"] = owned_source_name(args.installation_id)
+
     dash = dash_mod.load_dashboard()
     errors = dash_mod.validate_dashboard(dash)
     if errors:
@@ -343,8 +355,6 @@ def main(argv=None) -> int:
         return 2
     built = build_management_dashboards(dash, compartment_id)
     if args.installation_id:
-        from .ownership import validate_installation
-        validate_installation(args.installation_id)
         for item in built:
             item["displayName"] += f" [{args.installation_id}]"
     if not args.quiet:
