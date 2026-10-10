@@ -23,8 +23,12 @@ def normalize_flow_log_record(raw: dict[str, Any]) -> dict[str, Any]:
     data = raw.get("data", raw)
     log_content = data.get("logContent") if isinstance(data, dict) else None
     if isinstance(log_content, dict):
-        return {"data": log_content.get("data", {}), "time": log_content.get("time")}
-    return {"data": data, "time": raw.get("time") or (data.get("time") if isinstance(data, dict) else None)}
+        # Preserve capture metadata attached to the outer Logging result; it
+        # identifies the local endpoint only and is consumed by correlation.
+        return {**raw, "data": log_content.get("data", {}),
+                "time": log_content.get("time") or raw.get("time")}
+    return {**raw, "data": data,
+            "time": raw.get("time") or (data.get("time") if isinstance(data, dict) else None)}
 
 
 def fetch_flow_logs(

@@ -17,12 +17,14 @@ resource "oci_functions_application" "refresh" {
   display_name   = "${local.name_prefix}-fn-app"
   subnet_ids     = [oci_core_subnet.controller.id]
   config = {
-    STATE_BUCKET            = oci_objectstorage_bucket.state.name
-    REGION                  = var.region
-    LOG_GROUP_NAME          = "${local.name_prefix}-la"
-    FLOW_LOG_COMPARTMENT_ID = var.compartment_ocid
-    FLOW_LOG_GROUP_ID       = oci_logging_log_group.flow.id
-    FLOW_LOG_ID             = oci_logging_log.subnet_flow.id
+    STATE_BUCKET                 = oci_objectstorage_bucket.state.name
+    REGION                       = var.region
+    LOG_GROUP_NAME               = "${local.name_prefix}-la"
+    COLLECTION_COMPARTMENT_ID    = var.compartment_ocid
+    LOG_ANALYTICS_COMPARTMENT_ID = var.compartment_ocid
+    FLOW_LOG_COMPARTMENT_ID      = var.compartment_ocid
+    FLOW_LOG_GROUP_ID            = oci_logging_log_group.flow.id
+    FLOW_LOG_ID                  = oci_logging_log.subnet_flow.id
   }
   freeform_tags = local.common_tags
 }

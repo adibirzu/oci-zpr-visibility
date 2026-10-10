@@ -1,0 +1,18 @@
+[Unit]
+Description=Provision OCI ZPR Visibility content and initial collection
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/zpr-visibility/config.json
+StartLimitIntervalSec=1800
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+ExecStart=/opt/zpr-visibility/runtime.py bootstrap
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=120
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

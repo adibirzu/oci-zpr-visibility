@@ -124,14 +124,16 @@ Build and import the seven-dashboard OCI LA suite (40 tiles total) from the desc
 
 ```bash
 oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --dry-run   # preview tiles
-oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION>            # import (idempotent)
+oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> --compartment-id <COMPARTMENT_OCID> # initial import only
 oci-zpr-visibility validate-dashboards --profile <PROFILE> --region <REGION>          # confirm every query parses, executes, and returns expected data
 ```
 
 The suite appears under Log Analytics → Dashboards as "OCI ZPR Visibility"
 (executive posture) plus one "OCI ZPR Visibility - <view>" dashboard per
-remaining view. Re-running deletes each prior same-name dashboard and re-imports
-(safe to repeat).
+remaining view. Existing same-name dashboards now block import; no dashboard is
+deleted. Inventory failures also block import. Owned-ID upgrades and cleanup
+are not implemented yet: preserve existing dashboards and do not automate a
+delete/re-import workaround. See [lifecycle review](resource-manager-lifecycle-review.md).
 
 
 ## IAM (least privilege)

@@ -63,9 +63,10 @@ def protected_resource_record(
 
 
 class ZprCollector:
-    def __init__(self, session: OciSession) -> None:
+    def __init__(self, session: OciSession, compartment_ids=None) -> None:
         self.session = session
         self.oci = session.oci
+        self.selected_compartments = list(dict.fromkeys(compartment_ids)) if compartment_ids else None
         self.collection_errors: list[dict[str, Any]] = []
         self.collection_error_count = 0
         self.coverage_counts: dict[str, dict[str, int]] = {}
@@ -251,6 +252,8 @@ class ZprCollector:
 
     def _compartment_ids(self) -> list[str]:
         """Tenancy root + all ACTIVE subtree compartments (best-effort)."""
+        if self.selected_compartments is not None:
+            return list(self.selected_compartments)
         ids = [self.session.tenancy_id]
         try:
             identity = client(self.session, "identity.IdentityClient")

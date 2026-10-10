@@ -46,8 +46,9 @@
           ]
         },
         {
-          "name": "KPI: Blocked flows",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as blocked_flows",
+          "name": "KPI: Flow Log REJECT tuples",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as rejected_flow_tuples",
+          "description": "Distinct source/destination/port/protocol tuples recorded with Flow Log action REJECT in the selected window. This is not a ZPR verdict.",
           "visualization_type": "tile",
           "layout": {
             "width": 2,
@@ -69,7 +70,7 @@
         },
         {
           "name": "Active ZPR policies",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(policy_id) as active_policies by policy_lifecycle_state",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats latest(policy_lifecycle_state) as current_policy_lifecycle_state by policy_id | where current_policy_lifecycle_state = 'ACTIVE' | stats count as active_policies",
           "visualization_type": "bar",
           "layout": {
             "width": 3,
@@ -153,8 +154,9 @@
           ]
         },
         {
-          "name": "Policy relationship sunburst",
+          "name": "Policy intent — modeled attribute relationships",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_statement' | stats distinctcount(statement) as rules by source_attribute, destination_attribute",
+          "description": "Relationships modeled by collected policy statements. This is policy intent, not observed traffic.",
           "visualization_type": "sunburst",
           "layout": {
             "width": 6,
@@ -223,8 +225,9 @@
       "name": "Allow block traffic",
       "widgets": [
         {
-          "name": "Enriched ACCEPT vs REJECT",
+          "name": "Flow Log actions and review classifications",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as flows by action, review_classification",
+          "description": "ACCEPT and REJECT are VCN Flow Log actions. Review classifications compare those observations with collected policy intent and are not provider ZPR verdicts.",
           "visualization_type": "bar",
           "layout": {
             "width": 6,
@@ -241,6 +244,36 @@
           },
           "ask_ai_prompts": [
             "Break down flows by action and classification over time."
+          ],
+          "data_dependency": "flow"
+        },
+        {
+          "name": "Top observed flow pairs",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats distinctcount(flow_id) as unique_flow_ids by source_resource_name, destination_resource_name, source_ip, destination_ip | sort -unique_flow_ids",
+          "description": "Counts distinct Flow Log flow IDs by resolved endpoint pair in the selected time range. Rows without a flow ID are not included in the count.",
+          "visualization_type": "hbar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {},
+          "ask_ai_prompts": [
+            "Which observed source and destination pairs have the most distinct flow IDs in this time range?"
+          ],
+          "data_dependency": "flow"
+        },
+        {
+          "name": "Flow IDs by protocol",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | stats distinctcount(flow_id) as unique_flow_ids by protocol | sort -unique_flow_ids",
+          "description": "Counts distinct Flow Log flow IDs by recorded protocol in the selected time range. Rows without a flow ID are not included in the count.",
+          "visualization_type": "bar",
+          "layout": {
+            "width": 6,
+            "height": 5
+          },
+          "visualization_options": {},
+          "ask_ai_prompts": [
+            "How are distinct observed flow IDs distributed across recorded protocols in this time range?"
           ],
           "data_dependency": "flow"
         },
@@ -267,8 +300,9 @@
           "data_dependency": "flow"
         },
         {
-          "name": "Rejected protected destinations",
+          "name": "Flow Log REJECTs to protected destinations",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | fields event_time, review_classification, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, source_port, destination_port, protocol, flow_id, bytes_out, packets, capture_status",
+          "description": "Observed Flow Log REJECT records whose destination was attributed to a protected resource in the collected inventory. The rejecting control is not identified by this record.",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -284,7 +318,7 @@
             }
           },
           "ask_ai_prompts": [
-            "Which rejected flows targeted ZPR-protected destinations?"
+            "Which Flow Log REJECT observations targeted resources identified as protected in the collected inventory?"
           ],
           "data_dependency": "flow"
         },
@@ -311,8 +345,9 @@
           "data_dependency": "flow"
         },
         {
-          "name": "Flow path link (src to dst)",
+          "name": "Observed paths — VCN Flow Logs",
           "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' | link source_resource_name, destination_resource_name, review_classification",
+          "description": "Observed source-to-destination relationships from correlated VCN Flow Logs. This is separate from modeled policy intent and does not prove ZPR enforcement.",
           "visualization_type": "link",
           "layout": {
             "width": 12,
@@ -328,7 +363,7 @@
             }
           },
           "ask_ai_prompts": [
-            "Trace flows from source to destination by classification."
+            "Trace observed VCN Flow Log paths from source to destination by review classification."
           ],
           "data_dependency": "flow"
         }
@@ -343,6 +378,17 @@
           "visualization_type": "table",
           "layout": {
             "width": 12,
+            "height": 5
+          },
+          "visualization_options": {}
+        },
+        {
+          "name": "Policy changes over time",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_policy_drift' | timestats span = 15min count by change_type",
+          "description": "Policy drift records emitted after successful snapshot comparisons, grouped by 15-minute event-time buckets. Choose a wider time range to explore history.",
+          "visualization_type": "line",
+          "layout": {
+            "width": 6,
             "height": 5
           },
           "visualization_options": {}
@@ -395,8 +441,9 @@
           "data_dependency": "flow"
         },
         {
-          "name": "DET: Blocked to protected",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as blocked_to_protected",
+          "name": "DET: Flow Log REJECT to protected destination",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | eval fk = source_ip || '|' || destination_ip || '|' || destination_port || '|' || protocol | stats distinctcount(fk) as rejected_flow_tuples",
+          "description": "Distinct observed Flow Log REJECT tuples to protected destinations. This does not identify the rejecting control.",
           "visualization_type": "tile",
           "layout": {
             "width": 3,
@@ -439,8 +486,8 @@
           "data_dependency": "flow"
         },
         {
-          "name": "Detection: blocked to protected (ZPR-Blocked-Protected)",
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | eval Detection = 'ZPR-Blocked-Protected' | fields Detection, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
+          "name": "Detection: Flow Log REJECT to protected destination",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_enriched_flow' and action = 'REJECT' and zpr_destination = true | eval Detection = 'FLOW-REJECT-PROTECTED-DESTINATION' | fields Detection, correlation_confidence, zpr_attribution, source_resource_name, source_ip, destination_resource_name, destination_ip, destination_port, protocol",
           "visualization_type": "table",
           "layout": {
             "width": 12,
@@ -507,7 +554,7 @@
         {
           "name": "Collection gaps",
           "allow_zero": true,
-          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, collection_operation, resource_type, error_category, occurrence_count, recommendation, run_id",
+          "query": "'Log Source' = 'OCI ZPR Visibility JSON' | where record_type = 'zpr_collection_gap' | fields event_time, severity, collection_service, Operation, resource_type, Category, occurrence_count, recommendation, run_id",
           "visualization_type": "table",
           "layout": {
             "width": 12,

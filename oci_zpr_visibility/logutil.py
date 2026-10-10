@@ -28,6 +28,12 @@ def describe_exception(exc: BaseException) -> str:
         value = getattr(exc, attribute, None)
         if isinstance(value, str) and _SAFE_TOKEN.fullmatch(value):
             parts.append(f"{label}={value}")
+    # LA sometimes returns errorCode instead of code; OCI retains it in args.
+    # Expose only fixed vocabulary, never raw messages or service endpoints.
+    if exc.args and isinstance(exc.args[0], dict):
+        value = exc.args[0].get("error_code")
+        if isinstance(value, str) and _SAFE_TOKEN.fullmatch(value):
+            parts.append(f"service_code={value}")
     return " ".join(parts)
 
 

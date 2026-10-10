@@ -26,6 +26,8 @@ def handler(ctx, data: io.BytesIO = None):
     state_bucket = cfg.get("STATE_BUCKET") or os.environ.get("STATE_BUCKET", "")
     region = cfg.get("REGION") or os.environ.get("REGION", "")
     log_group = cfg.get("LOG_GROUP_NAME") or os.environ.get("LOG_GROUP_NAME", "zpr-visibility-la")
+    collection_compartment_id = cfg.get("COLLECTION_COMPARTMENT_ID") or os.environ.get("COLLECTION_COMPARTMENT_ID", "")
+    log_analytics_compartment_id = cfg.get("LOG_ANALYTICS_COMPARTMENT_ID") or os.environ.get("LOG_ANALYTICS_COMPARTMENT_ID", "")
     flow_compartment_id = cfg.get("FLOW_LOG_COMPARTMENT_ID") or os.environ.get("FLOW_LOG_COMPARTMENT_ID", "")
     flow_log_group_id = cfg.get("FLOW_LOG_GROUP_ID") or os.environ.get("FLOW_LOG_GROUP_ID", "")
     flow_log_id = cfg.get("FLOW_LOG_ID") or os.environ.get("FLOW_LOG_ID", "")
@@ -39,6 +41,10 @@ def handler(ctx, data: io.BytesIO = None):
 
     argv = ["--auth", "resource_principal", "--state-bucket", state_bucket,
             "--log-group-name", log_group, "--json"]
+    if collection_compartment_id:
+        argv += ["--collection-compartment-id", collection_compartment_id]
+    if log_analytics_compartment_id:
+        argv += ["--log-analytics-compartment-id", log_analytics_compartment_id]
     if region:
         argv += ["--region", region]
     if flow_log_group_id and flow_log_id:

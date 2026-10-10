@@ -6,7 +6,7 @@ from oci_zpr_visibility.flow_logs import normalize_flow_log_record
 
 class NormalizeFlowLogTests(unittest.TestCase):
     def test_unwraps_log_content(self):
-        raw = {"data": {"logContent": {
+        raw = {"oracle.vnicocid": "vnic-local", "oracle.vcnocid": "vcn-local", "data": {"logContent": {
             "data": {"action": "REJECT", "sourceAddress": "10.0.1.10",
                      "destinationAddress": "10.0.2.20", "destinationPort": 1521,
                      "protocolName": "TCP"},
@@ -15,6 +15,8 @@ class NormalizeFlowLogTests(unittest.TestCase):
         self.assertEqual(norm["data"]["action"], "REJECT")
         self.assertEqual(norm["data"]["sourceAddress"], "10.0.1.10")
         self.assertEqual(norm["time"], "2026-06-04T10:00:00Z")
+        self.assertEqual(norm["oracle.vnicocid"], "vnic-local")
+        self.assertEqual(norm["oracle.vcnocid"], "vcn-local")
 
     def test_normalized_record_feeds_correlate(self):
         snapshot = {

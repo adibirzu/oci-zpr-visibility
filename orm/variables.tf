@@ -4,6 +4,15 @@ variable "compartment_ocid" {
   description = "Compartment for the lab resources (root tenancy is fine)."
 }
 variable "region" { type = string }
+variable "installation_id" {
+  type        = string
+  default     = "zpr-visibility"
+  description = "Unique installation owner ID. Keep unchanged across upgrades."
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{2,39}$", var.installation_id))
+    error_message = "Use 3-40 lowercase letters, digits and hyphens."
+  }
+}
 
 variable "config_file_profile" {
   type    = string
@@ -45,7 +54,7 @@ variable "function_image" {
 }
 
 locals {
-  name_prefix = "zpr-visibility"
+  name_prefix = var.installation_id
   common_tags = { project = "oci-zpr-visibility", lab = "zpr-demo" }
 
   enable_controller = var.deployment_mode == "controller_vm"
@@ -61,9 +70,11 @@ locals {
   # instance-family, compartments, buckets); manage verbs are kept narrow.
   refresh_grants = [
     { perm = "manage loganalytics-features-family", scope = "tenancy" },
-    { perm = "manage management-dashboard-family", scope = "tenancy" },
-    { perm = "read all-resources", scope = "tenancy" },
-    { perm = "use metrics", scope = "tenancy" },
-    { perm = "manage objects", scope = "compartment id ${var.compartment_ocid}" },
+    { perm = "manage management-dashboard-family", scope = "compartment id ${var.compartment_ocid}" },
+    { perm = "read all-resources", scope = "compartment id ${var.compartment_ocid}" },
+    { perm = "read zpr-family", scope = "tenancy" },
+    { perm = "read security-attribute-namespaces", scope = "tenancy" },
+    { perm = "use metrics", scope = "compartment id ${var.compartment_ocid}" },
+    { perm = "manage objects", scope = "compartment id ${var.compartment_ocid} where any {target.bucket.name='${local.name_prefix}-state',target.bucket.name='${local.name_prefix}-pkg'}" },
   ]
 }

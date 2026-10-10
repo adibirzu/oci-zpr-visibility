@@ -1,0 +1,14 @@
+[Unit]
+Description=Generate unique ZPR Visibility appliance host identity
+ConditionFirstBoot=yes
+Before=sshd.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemd-machine-id-setup
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

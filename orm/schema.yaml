@@ -10,12 +10,18 @@ variableGroups:
   - title: "Lab"
     variables: ["instance_image_ocid", "ssh_public_key"]
   - title: "Autonomy"
-    variables: ["deployment_mode", "function_image"]
+    variables: ["installation_id", "deployment_mode", "function_image"]
   - title: "Hidden"
     variables: ["tenancy_ocid", "package_tarball_path"]
     visible: false
 
 variables:
+  installation_id:
+    type: string
+    title: "Installation owner ID"
+    description: "3-40 lowercase letters, digits or hyphens. Keep unchanged for upgrades. Log Analytics objects and state are installation-bound."
+    default: zpr-visibility
+    required: true
   compartment_ocid:
     type: oci:identity:compartment:id
     title: "Compartment"
@@ -45,7 +51,7 @@ variables:
   deployment_mode:
     type: enum
     title: "Autonomy mode"
-    description: "How the refresh unit runs. Controller VM: a small VM with a built-in 15-min cron (instance principal), works in any region today. Function: serverless OCI Function (resource principal); push the image with 'fn deploy' and invoke it from Events/Connector Hub/API Gateway/your scheduler (no native cron-for-Functions)."
+    description: "Controller VM: private VM, supervised bootstrap/readiness and a 15-minute refresh timer. Resource Manager provisions infrastructure; verify ingestion and dashboards through the documented OCI CLI lifecycle checks after apply. Function mode requires a separately published image and scheduler."
     enum:
       - controller_vm
       - function

@@ -21,7 +21,9 @@ below it shows the parsed fields. See
 
 Every record carries a `record_type`. There are eight, each a different lens on
 ZPR. Common envelope fields are `schema_version`, opaque `run_id`, `record_type`,
-`event_time` (→ **Time**), and `inventory_snapshot_time`. The run ID contains no
+`event_time` (→ **Time**), and `inventory_snapshot_time`. Optional opaque
+`installation_id` and `scope_id` identify the operator-selected installation and
+collection scope without embedding tenancy identifiers. The run ID contains no
 tenant, resource, or topology information and binds live validation to the exact
 collector run that produced the evidence.
 
@@ -34,7 +36,7 @@ collector run that produced the evidence.
 | `source_attribute`, `destination_attribute` | parsed security-attribute endpoints |
 | `source_type`, `destination_type` | `attribute`, `cidr`, `ip`, `all_endpoints`, or `unknown` |
 | `source_cidrs`, `destination_cidrs`, `source_ips`, `destination_ips` | parsed address endpoints used by correlation |
-| `network_scope`, `target_type` | VCN scope and compatibility target type |
+| `network_scope`, `source_vcn_scope`, `destination_vcn_scope`, `target_type` | Legacy plus parsed single/cross-VCN scope context and compatibility target type |
 | `action`, `parser_confidence` | `allow`; parser confidence 0–1 |
 
 ### 2. `zpr_resource` — one row per protected (security-attributed) resource
@@ -60,6 +62,7 @@ collector run that produced the evidence.
 | `classification` | backwards-compatible internal correlation class |
 | `review_classification` | customer-facing, evidence-safe triage class |
 | `correlation_confidence`, `correlation_reason` | how strongly the inventory/policy model supports the inference |
+| `correlation_version` | version of the correlation rules used for this inference |
 | `zpr_attribution` | always `INFERRED_NOT_PROVIDER_VERDICT` for VCN Flow Log correlation |
 | `source_ip`, `source_port`, `destination_ip`, `destination_port`, `protocol` | the flow tuple |
 | `flow_id`, `bytes_out`, `packets`, `capture_status` | retained VCN Flow Log evidence |
