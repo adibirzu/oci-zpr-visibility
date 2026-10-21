@@ -5,9 +5,80 @@ from oci_zpr_visibility.policy_parser import policy_statement_records
 
 
 class CorrelateTests(unittest.TestCase):
+    def test_cross_vcn_scope_requires_inventory_membership(self):
+        snapshot = {"resources": [
+            {"resource_type": "Vcn", "resource_id": "vcn-a", "normalized_security_attributes": {"app": "source"}},
+            {"resource_type": "Vcn", "resource_id": "vcn-b", "normalized_security_attributes": {"app": "destination"}},
+        ], "ip_resource_map": [
+            {"private_ip": "10.0.0.1", "vcn_id": "vcn-a", "normalized_security_attributes": {"app": "web"}},
+            {"private_ip": "10.1.0.1", "vcn_id": "vcn-b", "normalized_security_attributes": {"app": "db"}},
+        ]}
+        policy = policy_statement_records({"id": "p", "lifecycle_state": "ACTIVE", "statements": [
+            "in app:source VCN allow app:web endpoints to connect to app:db endpoints in app:destination VCN"
+        ]}, "t")
+        flow = {"data": {"sourceAddress": "10.0.0.1", "destinationAddress": "10.1.0.1", "action": "ACCEPT"}}
+        self.assertTrue(correlate_flow_records([flow], snapshot, policy)[0]["matched_expected_policy"])
+        snapshot["resources"][1]["resource_id"] = "vcn-other"
+        self.assertFalse(correlate_flow_records([flow], snapshot, policy)[0]["matched_expected_policy"])
+
+    def test_scoped_policy_after_nonmatching_policy_does_not_crash(self):
+        snapshot = {"resources": [
+            {"resource_type": "Vcn", "resource_id": "vcn-a",
+             "normalized_security_attributes": {"networks": "prod"}},
+        ], "ip_resource_map": [
+            {"private_ip": "10.0.0.1", "vcn_id": "vcn-a",
+             "normalized_security_attributes": {"apps.role": "web"}},
+            {"private_ip": "10.0.0.2", "vcn_id": "vcn-a",
+             "normalized_security_attributes": {"apps.role": "db"}},
+        ]}
+        policies = [
+            {"policy_id": "nonmatch", "policy_lifecycle_state": "ACTIVE",
+             "source_attribute": "apps:other", "destination_attribute": "apps:db",
+             "target_type": "attribute"},
+            {"policy_id": "scoped-match", "policy_lifecycle_state": "ACTIVE",
+             "source_vcn_scope": "networks:prod", "destination_vcn_scope": "networks:prod",
+             "source_attribute": "apps:web", "destination_attribute": "apps:db",
+             "target_type": "attribute"},
+        ]
+        flow = {"data": {"sourceAddress": "10.0.0.1", "destinationAddress": "10.0.0.2",
+                         "action": "ACCEPT"}}
+
+        record = correlate_flow_records([flow], snapshot, policies)[0]
+
+        self.assertTrue(record["matched_expected_policy"])
+        self.assertEqual(record["matched_policy_id"], "scoped-match")
+
+    def test_capture_context_does_not_resolve_ambiguous_peer(self):
+        snapshot = {"ip_resource_map": [
+            {"private_ip": "10.0.0.1", "vnic_id": "local", "vcn_id": "a", "resource_id": "source"},
+            {"private_ip": "10.0.0.2", "vcn_id": "a", "resource_id": "peer-a"},
+            {"private_ip": "10.0.0.2", "vcn_id": "b", "resource_id": "peer-b"},
+        ]}
+        flow = {"oracle.vnicocid": "local", "oracle.vcnocid": "a", "data": {
+            "sourceAddress": "10.0.0.1", "destinationAddress": "10.0.0.2", "action": "ACCEPT"}}
+        record = correlate_flow_records([flow], snapshot, [])[0]
+        self.assertEqual(record["source_resource_id"], "source")
+        self.assertIsNone(record["destination_resource_id"])
+        self.assertEqual(record["correlation_reason"], "ambiguous_destination_address")
+
+    def test_capture_context_can_identify_destination_side_for_ingress_flow(self):
+        snapshot = {"ip_resource_map": [
+            {"private_ip": "10.0.0.2", "vcn_id": "a", "resource_id": "peer-a"},
+            {"private_ip": "10.0.0.2", "vcn_id": "b", "resource_id": "peer-b"},
+            {"private_ip": "10.0.0.1", "vnic_id": "local", "vcn_id": "a", "resource_id": "destination"},
+        ]}
+        flow = {"oracle.vnicocid": "local", "oracle.vcnocid": "a", "data": {
+            "sourceAddress": "10.0.0.2", "destinationAddress": "10.0.0.1", "action": "ACCEPT"}}
+        record = correlate_flow_records([flow], snapshot, [])[0]
+        self.assertIsNone(record["source_resource_id"])
+        self.assertEqual(record["destination_resource_id"], "destination")
+        self.assertEqual(record["correlation_reason"], "ambiguous_source_address")
+
     def test_correlates_expected_and_rejected_flows(self):
         snapshot = {
             "snapshot_time": "2026-06-03T10:00:00Z",
+            "resources": [{"resource_type": "Vcn", "resource_id": "vcn-prod",
+                "normalized_security_attributes": {"networks": "prod"}}],
             "zpr_policies": [
                 {
                     "id": "policy-1",
@@ -20,18 +91,21 @@ class CorrelateTests(unittest.TestCase):
                     "private_ip": "10.0.1.10",
                     "resource_id": "web-1",
                     "resource_name": "web",
+                    "vcn_id": "vcn-prod",
                     "normalized_security_attributes": {"apps.role": "web"},
                 },
                 {
                     "private_ip": "10.0.2.20",
                     "resource_id": "db-1",
                     "resource_name": "db",
+                    "vcn_id": "vcn-prod",
                     "normalized_security_attributes": {"apps.role": "db"},
                 },
                 {
                     "private_ip": "10.0.2.30",
                     "resource_id": "payroll-db",
                     "resource_name": "payroll-db",
+                    "vcn_id": "vcn-prod",
                     "normalized_security_attributes": {"apps.role": "payroll-db"},
                 },
             ],
@@ -119,6 +193,31 @@ class CorrelateTests(unittest.TestCase):
         }}], snapshot, policies)[0]
         self.assertTrue(record["matched_expected_policy"])
         self.assertEqual(record["review_classification"], "policy_consistent_accept")
+
+    def test_duplicate_ip_across_vcns_is_inconclusive_without_flow_context(self):
+        snapshot = {
+            "snapshot_time": "2026-06-03T10:00:00Z",
+            "ip_resource_map": [
+                {"private_ip": "10.0.1.10", "resource_id": "web-a", "vcn_id": "vcn-a",
+                 "normalized_security_attributes": {"apps.role": "web"}},
+                {"private_ip": "10.0.1.10", "resource_id": "web-b", "vcn_id": "vcn-b",
+                 "normalized_security_attributes": {"apps.role": "web"}},
+                {"private_ip": "10.0.2.20", "resource_id": "db", "vcn_id": "vcn-a",
+                 "normalized_security_attributes": {"apps.role": "db"}},
+            ],
+        }
+        policies = policy_statement_records({
+            "id": "p1", "lifecycle_state": "ACTIVE",
+            "statements": ["allow apps:web endpoints to connect to apps:db endpoints"],
+        }, snapshot["snapshot_time"])
+
+        record = correlate_flow_records([{"data": {
+            "sourceAddress": "10.0.1.10", "destinationAddress": "10.0.2.20", "action": "ACCEPT"
+        }}], snapshot, policies)[0]
+
+        self.assertIsNone(record["source_resource_id"])
+        self.assertEqual(record["correlation_reason"], "ambiguous_source_address")
+        self.assertEqual(record["review_classification"], "needs_enrichment")
 
 
 if __name__ == "__main__":

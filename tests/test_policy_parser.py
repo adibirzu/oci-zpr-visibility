@@ -32,6 +32,26 @@ class PolicyParserTests(unittest.TestCase):
         self.assertEqual(parsed.destination_type, "attribute")
         self.assertEqual(parsed.destination_attribute, "app:db")
 
+    def test_parse_cross_vcn_scopes_without_treating_a_scope_as_an_attribute(self):
+        parsed = parse_statement(
+            "in vcn:source allow apps:web endpoints to connect to apps:db endpoints in vcn:destination"
+        )
+
+        self.assertEqual(parsed.source_vcn_scope, "vcn:source")
+        self.assertEqual(parsed.destination_vcn_scope, "vcn:destination")
+        self.assertEqual(parsed.source_attribute, "apps:web")
+        self.assertEqual(parsed.destination_attribute, "apps:db")
+        self.assertNotIn("vcn:destination", parsed.attribute_references)
+
+    def test_arbitrary_attribute_in_structural_vcn_clauses(self):
+        parsed = parse_statement(
+            "in app:source VCN allow app:web endpoints to connect to app:db endpoints in app:destination VCN"
+        )
+        self.assertEqual(parsed.source_vcn_scope, "app:source")
+        self.assertEqual(parsed.destination_vcn_scope, "app:destination")
+        self.assertEqual(parsed.source_attribute, "app:web")
+        self.assertEqual(parsed.destination_attribute, "app:db")
+
 
 if __name__ == "__main__":
     unittest.main()

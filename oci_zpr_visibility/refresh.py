@@ -40,6 +40,13 @@ def main(argv=None) -> int:
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--region", default=None)
     p.add_argument("--state-bucket", required=True, help="Object Storage bucket holding previous-run state")
+    p.add_argument("--installation-id", default=None,
+                   help="Opaque operator-assigned identifier for this installation (no tenancy data).")
+    p.add_argument("--scope-id", default=None,
+                   help="Opaque operator-assigned identifier for the selected collection scope.")
+    p.add_argument("--collection-compartment-id", action="append")
+    p.add_argument("--upload-only", action="store_true", help="Upload using previously provisioned owned content")
+    p.add_argument("--strict", action="store_true", help="Fail on inventory or configured-flow collection gaps")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
     p.add_argument("--log-group-compartment-id", default=None,
                    help="Compartment for the Log Analytics log group. Defaults to the tenancy.")
@@ -113,6 +120,8 @@ def main(argv=None) -> int:
         [*records, *findings, *drift, *flows],
         run_id=run_id,
         inventory_snapshot_time=snapshot_time,
+        installation_id=args.installation_id,
+        scope_id=args.scope_id,
     )
     # Gap records are deduplicated; the snapshot carries the true occurrence total.
     collection_error_count = int(
@@ -129,6 +138,8 @@ def main(argv=None) -> int:
             drift_count=len(drift),
             flow_count=len(flows),
             collection_error_count=collection_error_count,
+            installation_id=args.installation_id,
+            scope_id=args.scope_id,
         )
     )
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
@@ -141,17 +152,26 @@ def main(argv=None) -> int:
         prov_argv += ["--log-group-compartment-id", args.log_group_compartment_id]
     if args.region:
         prov_argv += ["--region", args.region]
+    if args.log_analytics_compartment_id:
+        prov_argv += ["--compartment-id", args.log_analytics_compartment_id]
     if args.config_file:
         prov_argv += ["--config-file", args.config_file]
     if args.quiet:
         prov_argv += ["--quiet"]
+    if args.installation_id:
+        prov_argv += ["--installation-id", args.installation_id, "--state-bucket", args.state_bucket]
+    if args.upload_only:
+        prov_argv += ["--upload-only"]
     try:
         rc = provision_la.main(prov_argv)
     finally:
         # Records can contain tenant inventory and flow details. The upload
         # staging file is intentionally short-lived and must not remain on disk.
         Path(records_path).unlink(missing_ok=True)
-    if rc == 0:
+    strict_collection_failed = bool(
+        args.strict and (collection_error_count or flow_collection_status == FLOW_STATUS_FAILED)
+    )
+    if rc == 0 and not strict_collection_failed:
         # Advance drift state only after the current evidence was accepted for
         # upload. A failed upload must not erase the next run's comparison base.
         save_records(session, args.state_bucket, records)
@@ -173,7 +193,7 @@ def main(argv=None) -> int:
         f"{len(flows)} flows -> uploaded {uploaded}, {published} metrics (provision rc={rc})",
         args.json,
     )
-    return rc
+    return rc or (1 if strict_collection_failed else 0)
 
 
 if __name__ == "__main__":

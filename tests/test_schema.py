@@ -36,6 +36,15 @@ class SchemaTests(unittest.TestCase):
         self.assertNotIn("tenancy_id", record)
         self.assertNotIn("compartment_id", record)
 
+    def test_run_record_keeps_optional_installation_scope(self):
+        record = run_record(
+            run_id="run-1", event_time="2026-01-01T00:00:00Z", collection_status="SUCCEEDED",
+            flow_collection_status=FLOW_STATUS_NOT_CONFIGURED, record_count=0, finding_count=0,
+            drift_count=0, flow_count=0, installation_id="install-1", scope_id="scope-1",
+        )
+        self.assertEqual(record["installation_id"], "install-1")
+        self.assertEqual(record["scope_id"], "scope-1")
+
     def test_run_record_rejects_unknown_flow_collection_status(self):
         """One vocabulary: the flow-status widget and the validation gate both
         group on this value, so a second spelling would split the same state."""
@@ -58,6 +67,16 @@ class SchemaTests(unittest.TestCase):
             inventory_snapshot_time="2026-01-01T00:00:00Z",
         )
         self.assertEqual(record["event_time"], "2026-01-01T00:00:00Z")
+
+    def test_scope_and_installation_identifiers_are_additive(self):
+        record = normalize_record(
+            {"record_type": "zpr_resource"},
+            run_id="run-1",
+            installation_id="install-1",
+            scope_id="scope-1",
+        )
+        self.assertEqual(record["installation_id"], "install-1")
+        self.assertEqual(record["scope_id"], "scope-1")
 
 
 if __name__ == "__main__":

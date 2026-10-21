@@ -28,7 +28,7 @@ blank compartment entry is rejected.
 
 | Module (file) | Resources |
 |---------------|-----------|
-| `network.tf` | VCN (ZPR-tagged `oracle-zpr.app=fin-network`), public + private subnets, IGW, route table, security list, subnet VCN Flow Logs |
+| `network.tf` | VCN (ZPR-tagged `oracle-zpr.app=fin-network`), private controller and endpoint subnets, NAT + Oracle Services Network gateway routes, security list, subnet VCN Flow Logs |
 | `zpr.tf` | `app` security attribute in the `oracle-zpr` namespace + a ZPR policy (web→db allow; broad-CIDR exception) |
 | `compute.tf` | 2 ZPR-tagged endpoints — `web` (app=web) and `db` (app=db) — generating intra-VCN traffic (web→db allowed; db→web denied by ZPR) |
 | `storage.tf` | drift-state bucket + a bucket holding the collector package |
@@ -104,15 +104,17 @@ lab-only `manage all-resources` grant.
 ## Teardown (stop billing)
 
 ```bash
-cd orm && terraform destroy \
-  -var config_file_profile=<oci-profile> -var tenancy_ocid=<...> -var compartment_ocid=<...> \
-  -var region=<...> -var availability_domain=<...> -var instance_image_ocid=<...>
+python3.11 orm/rm_lifecycle.py destroy \
+  --config <PRIVATE_LIFECYCLE_CONFIG> --auth config --profile <PROFILE>
+# After ownership cleanup, create and review a fresh RM destroy plan/job.
 ```
 The endpoint instances are billable while running. In `controller_vm` mode, the
 controller instance is billable too; in `function` mode, the Function is
-pay-per-use and has no built-in cron. LA content + dashboard created by the
-controller persist (they're not Terraform-managed); remove them with the OCI
-console or the SDK if desired.
+pay-per-use and has no built-in cron. The controller ownership journal removes
+only verified installation-owned Log Analytics content before the reviewed RM
+destroy. Shared fields and foreign dashboards/searches are preserved; ambiguous
+ownership or unknown bucket objects stop teardown. Keep external ZPR/Log
+Analytics singleton foundation services intact.
 
 ## Idempotency / re-deploy
 

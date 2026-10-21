@@ -28,6 +28,21 @@ for attempt in range(40):
         print("waiting for instance principal/policy:", str(e)[:120]); time.sleep(20)
 sys.exit(1)
 PY
+install -d -m 0750 /opt/zpr-visibility/package
+tar xzf /opt/zpr-visibility/pkg.tgz -C /opt/zpr-visibility/package
+install -d -m 0750 /opt/zpr-visibility/build-tools
+/opt/zpr-visibility/venv/bin/pip download --require-hashes --only-binary=:all: \
+  --dest /opt/zpr-visibility/build-tools \
+  -r /opt/zpr-visibility/package/requirements-build.lock
+/opt/zpr-visibility/venv/bin/pip install --no-index --find-links /opt/zpr-visibility/build-tools \
+  --require-hashes -r /opt/zpr-visibility/package/requirements-build.lock
+/opt/zpr-visibility/venv/bin/pip install --no-deps --no-build-isolation /opt/zpr-visibility/package
+export OCI_ZPR_DASHBOARD_PATH=/opt/zpr-visibility/package/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
+/opt/zpr-visibility/venv/bin/python -m oci_zpr_visibility.controller_runtime bootstrap
+touch /var/lib/zpr-visibility/initial-refresh-succeeded
+systemctl enable --now zpr-refresh.timer
+BOOTSTRAP
+chmod 0750 /usr/local/sbin/zpr-bootstrap
 
 mkdir -p /tmp/pkg && tar xzf /tmp/pkg.tgz -C /tmp/pkg
 $PIP install --no-index --no-deps /tmp/pkg/*.whl

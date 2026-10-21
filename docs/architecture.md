@@ -86,7 +86,7 @@ stamps **Time** from `event_time`. Records are immediately queryable as
 `'Log Source' = 'OCI ZPR Visibility JSON'`.
 
 **F. Publish metrics + repeat.** `metrics.publish_metrics` posts gauges to the
-`zpr_visibility` Monitoring namespace; the controller's 15-minute cron re-runs
+`zpr_visibility` Monitoring namespace; the controller's 15-minute systemd timer re-runs
 `refresh` (collect → drift → upload → metrics), so the dashboard stays live.
 Because every run uploads a *full snapshot*, dashboard count widgets dedup to
 distinct identities (see §6) so totals don't multiply across runs.
@@ -151,9 +151,11 @@ Record types (discriminator `record_type`) and their fields are specified in
 
 ## 7. Detection / dashboard model
 
-Dashboard suite `OCI ZPR Visibility` — 7 focused dashboards / 40 widgets (KPI
-tiles, severity sunburst, flow trends and Link analysis, policy/resource/drift
-tables, detections, explicit resource coverage, and collection health).
+Dashboard suite `OCI ZPR Visibility` — 7 focused dashboards / 43 widgets:
+KPI tiles, severity sunburst, flow trends, distinct-flow-pair/protocol analysis,
+observed Flow Log paths, modeled policy relationships, policy drift over time,
+policy/resource/drift tables, detections, explicit resource coverage, and
+collection health.
 `deploy_dashboard.build_management_dashboards` maps each logical view to an OCI
 Management Dashboard and each widget to a saved search modelled on a working OCI
 LA export:

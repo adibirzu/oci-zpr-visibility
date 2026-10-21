@@ -3,7 +3,8 @@
 
 Builds an OCI Management Dashboard with embedded saved searches from the
 enriched dashboard descriptor (oci_zpr_visibility/dashboard.py) and imports it
-idempotently via DashxApisClient.import_dashboard. `--dry-run` prints the plan.
+via DashxApisClient.import_dashboard. Existing same-name dashboards block import
+until an explicit owned-ID migration is available. `--dry-run` prints the plan.
 
 Usage:
   oci-zpr-visibility deploy-dashboard --profile <PROFILE> --region <REGION> [--dry-run]
@@ -255,12 +256,21 @@ def main(argv=None) -> int:
     p.add_argument("--log-group-id", default=None, help="Bind every widget to this destination log group")
     p.add_argument("--log-group-name", default="zpr-visibility-la", help="Resolve this group in the dashboard compartment when no ID is supplied")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--installation-id")
+    p.add_argument("--state-bucket")
     p.add_argument("--quiet", action="store_true", help="suppress target identifiers from output")
     args = p.parse_args(argv)
 
     from .oci_clients import build_session, client
     session = build_session(args.auth, args.config_file, args.profile, args.region)
     compartment_id = args.compartment_id or session.tenancy_id
+
+    if args.installation_id:
+        from .ownership import validate_installation
+        from .provision_la import owned_source_name
+        validate_installation(args.installation_id)
+        import os
+        os.environ["OCI_ZPR_SOURCE_NAME"] = owned_source_name(args.installation_id)
 
     dash = dash_mod.load_dashboard()
     errors = dash_mod.validate_dashboard(dash)

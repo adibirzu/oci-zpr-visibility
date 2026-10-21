@@ -71,6 +71,7 @@ class ZprCollector:
     def __init__(self, session: OciSession, compartment_ids: list[str] | None = None) -> None:
         self.session = session
         self.oci = session.oci
+        self.selected_compartments = list(dict.fromkeys(compartment_ids)) if compartment_ids else None
         self.collection_errors: list[dict[str, Any]] = []
         self.collection_error_count = 0
         self.coverage_counts: dict[str, dict[str, int]] = {}

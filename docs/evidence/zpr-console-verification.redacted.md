@@ -31,6 +31,11 @@ flow KPIs (VCN Flow Logs lag ~10–15 min, so a ≥6h window is needed for those
 counts accumulate across the 15-min collector cron over the window). A 60-min
 window shows the policy/resource/finding widgets but 0 flows, which is expected.
 
+> Historical-label clarification (October 2, 2026): “Blocked flows” above is
+> the original dashboard label for distinct tuples with Flow Log action
+> `REJECT`. These records do not prove that ZPR caused the rejection. Current
+> dashboard labels and the detection catalog use Flow Log-specific names.
+
 ## 2. Security attributes ARE present (`oracle-zpr` namespace)
 
 ```

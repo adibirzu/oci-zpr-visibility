@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,7 @@ from .schema import FLOW_STATUS_NOT_CONFIGURED
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DASHBOARD = PROJECT_DIR / "log_analytics" / "dashboards" / "oci_zpr_visibility_dashboard.json"
 
-SOURCE_FILTER = "'Log Source' = 'OCI ZPR Visibility JSON'"
+SOURCE_FILTER = f"'Log Source' = '{os.environ.get('OCI_ZPR_SOURCE_NAME', 'OCI ZPR Visibility JSON')}'"
 # A run that reports any status other than NOT_CONFIGURED proves flow collection
 # was wired up, so flow-dependent widgets must produce data.
 FLOW_RUNS_QUERY = (
@@ -90,9 +91,38 @@ def _widget_status(count: int | None, widget: dict, flow_configured: bool, resou
     return "ZERO"
 
 
+def _count_indexed_records(la, ns, m, cfg, time_filter, run_id: str) -> int:
+    """Use an exact aggregate, not a capped record-list total/estimate."""
+    resp = la.query(
+        namespace_name=ns,
+        query_details=m.QueryDetails(
+            compartment_id=cfg.get("query_compartment", cfg["tenancy"]),
+            compartment_id_in_subtree=True,
+            query_string=(f"{SOURCE_FILTER} | where run_id = '{run_id}' "
+                          "| stats count as indexed_records"),
+            sub_system="LOG", time_filter=time_filter,
+            max_total_count=1, should_run_async=False,
+        ),
+    )
+    rows = resp.data.items or []
+    count = int(rows[0]["indexed_records"]) if rows else 0
+    if count < 0:
+        raise ValueError("negative indexed record count")
+    return count
+
+
 def main(argv=None) -> int:
+    global SOURCE_FILTER, FLOW_RUNS_QUERY
+    source = os.environ.get("OCI_ZPR_SOURCE_NAME", "OCI ZPR Visibility JSON")
+    if any(c in source for c in "'\n\r"):
+        raise ValueError("invalid Log Analytics source name")
+    SOURCE_FILTER = f"'Log Source' = '{source}'"
+    FLOW_RUNS_QUERY = (f"{SOURCE_FILTER} | where record_type = 'zpr_run' "
+        f"and flow_collection_status != '{FLOW_STATUS_NOT_CONFIGURED}' | fields run_id, flow_collection_status")
     p = argparse.ArgumentParser()
     p.add_argument("--profile", default="DEFAULT")
+    p.add_argument("--auth", choices=["api_key", "instance_principal", "resource_principal"], default="api_key")
+    p.add_argument("--config-file", default=None)
     p.add_argument("--region", default=None)
     p.add_argument("--compartment-id", default=None, help="Log Analytics destination scope; defaults to tenancy, includes its subtree")
     p.add_argument("--log-group-id", default=None, help="Exact expected destination log group OCID")
@@ -103,6 +133,8 @@ def main(argv=None) -> int:
     p.add_argument("--expected-record-count", type=int, default=None,
                    help="minimum indexed records required for --expected-run-id")
     p.add_argument("--quiet", action="store_true", help="emit only a sanitized summary")
+    p.add_argument("--allow-empty-widgets", action="store_true",
+                   help="Allow successful empty widget results; exact-run indexing is still required when configured")
     p.add_argument("--json", help="write a JSON report to this path")
     args = p.parse_args(argv)
 
@@ -224,13 +256,9 @@ def main(argv=None) -> int:
         if not re.fullmatch(r"[0-9a-fA-F-]{36}", args.expected_run_id):
             print("invalid expected run identifier", file=sys.stderr)
             return 3
-        evidence_query = (
-            f"{SOURCE_FILTER} | where run_id = '{args.expected_run_id}' "
-            "| fields record_type, run_id, schema_version"
-        )
         try:
-            current_run_count = _count_rows(
-                la, ns, m, cfg, time_filter, evidence_query, max_total_count=1000
+            current_run_count = _count_indexed_records(
+                la, ns, m, cfg, time_filter, args.expected_run_id
             )
             if current_run_count <= 0:
                 freshness_error = "no current-run records in the dashboard time window"
@@ -241,6 +269,8 @@ def main(argv=None) -> int:
                 )
         except oci.exceptions.ServiceError as exc:
             freshness_error = describe_exception(exc)
+        except (KeyError, TypeError, ValueError):
+            freshness_error = "invalid indexed record count response"
 
     from collections import Counter
     tally = Counter(r["status"] for r in results)

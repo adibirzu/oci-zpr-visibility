@@ -8,8 +8,8 @@ SEVERITY_WIDGETS = {
     "Missing policy findings", "Broad CIDR exceptions",
 }
 FLOW_WIDGETS = {
-    "Enriched ACCEPT vs REJECT", "Flow path link (src to dst)",
-    "Accepted flows requiring policy review", "Rejected protected destinations",
+    "Flow Log actions and review classifications", "Observed paths — VCN Flow Logs",
+    "Accepted flows requiring policy review", "Flow Log REJECTs to protected destinations",
 }
 SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 

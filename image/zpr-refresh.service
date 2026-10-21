@@ -1,0 +1,9 @@
+[Unit]
+Description=Collect OCI ZPR Visibility evidence
+Requires=zpr-bootstrap.service
+After=zpr-bootstrap.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /run/zpr-visibility-refresh.lock /opt/zpr-visibility/runtime.py refresh
+TimeoutStartSec=10min
