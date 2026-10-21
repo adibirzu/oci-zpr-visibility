@@ -114,7 +114,10 @@ class DashboardSchemaTests(unittest.TestCase):
         }
         self.assertEqual(
             allowed,
-            {"Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)", "Collection gaps"},
+            {"Detection: rejected expected allow (ZPR-Rejected-Expected-Allow)", "Collection gaps",
+             "Inventory collection gaps", "Policy drift candidates", "Detection: policy drift (ZPR-Policy-Drift)",
+             "Compute placement and lifecycle", "OKE placement and lifecycle",
+             "Autonomous Database lifecycle and placement"},
         )
 
     def test_flow_dependent_widgets_declare_their_dependency(self):

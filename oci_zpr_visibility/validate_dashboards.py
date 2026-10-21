@@ -40,11 +40,18 @@ FLOW_RUNS_QUERY = (
 )
 
 
+def _query_scope(m, cfg):
+    group = cfg.get("query_log_group")
+    return [m.ScopeFilter(field_name="Log Group", values=[group])] if group else None
+
+
 def _count_rows(la, ns, m, cfg, time_filter, query: str, max_total_count: int = 1) -> int:
     resp = la.query(
         namespace_name=ns,
         query_details=m.QueryDetails(
-            compartment_id=cfg["tenancy"],
+            compartment_id=cfg.get("query_compartment", cfg["tenancy"]),
+            compartment_id_in_subtree=True,
+            scope_filters=_query_scope(m, cfg),
             query_string=query,
             sub_system="LOG",
             time_filter=time_filter,
@@ -56,13 +63,24 @@ def _count_rows(la, ns, m, cfg, time_filter, query: str, max_total_count: int = 
     return resp.data.total_count if resp.data.total_count is not None else len(resp.data.items or [])
 
 
-def _widget_status(count: int | None, widget: dict, flow_configured: bool) -> str:
+def _widget_status(count: int | None, widget: dict, flow_configured: bool, resource_coverage: dict | None = None) -> str:
     """Classify a widget result.
 
     Zero rows is a failure by default. Flow-dependent widgets are only exempt
     when the ingested runs say flow collection was never configured — when it
     was configured, a zero row count is still a real gate failure.
     """
+    families = widget.get("resource_families", [])
+    if families:
+        coverage = resource_coverage or {}
+        if any(str(coverage.get(f, {}).get("coverage_status", "")).upper() != "COLLECTED" for f in families):
+            return "UNAVAILABLE"
+        if not count:
+            try:
+                eligible = sum(int(coverage[f]["eligible_count"]) for f in families)
+            except (KeyError, ValueError, TypeError):
+                return "UNAVAILABLE"
+            return "ZERO_ALLOWED" if eligible == 0 else "ZERO"
     if count:
         return "DATA"
     if widget.get("allow_zero"):
@@ -76,6 +94,9 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--region", default=None)
+    p.add_argument("--compartment-id", default=None, help="Log Analytics destination scope; defaults to tenancy, includes its subtree")
+    p.add_argument("--log-group-id", default=None, help="Exact expected destination log group OCID")
+    p.add_argument("--log-group-name", default="zpr-visibility-la", help="Resolve uniquely in the destination compartment when no ID is supplied")
     p.add_argument("--lookback-minutes", type=int, default=60)
     p.add_argument("--lookback-days", type=int, default=None, help="legacy override for wider evidence audits")
     p.add_argument("--expected-run-id", default=None, help="require records from this fresh collector run")
@@ -92,8 +113,23 @@ def main(argv=None) -> int:
             # with None would fail validate_config, which requires `region`.
             cfg["region"] = args.region
         oci.config.validate_config(cfg)
+        cfg["query_compartment"] = args.compartment_id or cfg["tenancy"]
         la = oci.log_analytics.LogAnalyticsClient(cfg)
         ns = oci.object_storage.ObjectStorageClient(cfg).get_namespace().data
+        if args.log_group_id:
+            group = la.get_log_analytics_log_group(ns, args.log_group_id).data
+            if group.compartment_id != cfg["query_compartment"]:
+                raise ValueError("log group does not belong to the expected destination compartment")
+            cfg["query_log_group"] = group.id
+        else:
+            groups = oci.pagination.list_call_get_all_results(
+                la.list_log_analytics_log_groups, namespace_name=ns,
+                compartment_id=cfg["query_compartment"], limit=200,
+            ).data
+            matches = [g for g in groups if g.display_name == args.log_group_name]
+            if len(matches) != 1:
+                raise ValueError("expected exactly one destination log group; provide --compartment-id and --log-group-id")
+            cfg["query_log_group"] = matches[0].id
     except Exception as exc:  # noqa: BLE001
         print(f"OCI setup failed: {describe_exception(exc)}", file=sys.stderr)
         return 3
@@ -126,6 +162,23 @@ def main(argv=None) -> int:
         print("  flow collection not configured in this window: "
               "flow-dependent widgets are reported as NOT_APPLICABLE")
 
+    coverage = {}
+    coverage_query = (
+        f"{SOURCE_FILTER} | where record_type = 'zpr_coverage' "
+        "| stats latest(coverage_status) as coverage_status, "
+        "latest(eligible_count) as eligible_count by resource_type"
+    )
+    try:
+        response = la.query(namespace_name=ns, limit=100, query_details=m.QueryDetails(
+            compartment_id=cfg["query_compartment"], compartment_id_in_subtree=True,
+            scope_filters=_query_scope(m, cfg), query_string=coverage_query,
+            sub_system="LOG", time_filter=time_filter, max_total_count=100,
+            should_run_async=False,
+        ))
+        coverage = {r["resource_type"]: r for r in response.data.items or []}
+    except oci.exceptions.ServiceError:
+        pass  # Family views fail unavailable when coverage cannot be established.
+
     results = []
     for tab in dash["tabs"]:
         for widget in tab["widgets"]:
@@ -138,7 +191,9 @@ def main(argv=None) -> int:
                 resp = la.query(
                     namespace_name=ns,
                     query_details=m.QueryDetails(
-                        compartment_id=cfg["tenancy"],
+                        compartment_id=cfg.get("query_compartment", cfg["tenancy"]),
+                        compartment_id_in_subtree=True,
+                        scope_filters=_query_scope(m, cfg),
                         query_string=q,
                         sub_system="LOG",
                         time_filter=time_filter,
@@ -148,7 +203,7 @@ def main(argv=None) -> int:
                     ),
                 )
                 count = resp.data.total_count if resp.data.total_count is not None else len(resp.data.items or [])
-                status = _widget_status(count, widget, flow_configured)
+                status = _widget_status(count, widget, flow_configured, coverage)
             except oci.exceptions.ServiceError as exc:
                 count, status = None, "ERROR"
                 err = describe_exception(exc)
@@ -158,7 +213,7 @@ def main(argv=None) -> int:
                             "status": status, "count": count, "error": err})
             if not args.quiet:
                 mark = {"DATA": "✓", "ZERO_ALLOWED": "·", "NOT_APPLICABLE": "○",
-                        "ZERO": "!", "ERROR": "✗"}[status]
+                        "ZERO": "!", "UNAVAILABLE": "?", "ERROR": "✗"}[status]
                 print(f"  {mark} [{tab['name'][:18]:18}] {widget['name'][:34]:34} "
                       f"{status:5} rows={count if count is not None else '-'}"
                       + (f"  {err[:60]}" if err else ""))
@@ -191,7 +246,7 @@ def main(argv=None) -> int:
     tally = Counter(r["status"] for r in results)
     print(f"validated={len(results)} data={tally['DATA']} zero_allowed={tally['ZERO_ALLOWED']} "
           f"not_applicable={tally['NOT_APPLICABLE']} "
-          f"zero_unexpected={tally['ZERO']} "
+          f"zero_unexpected={tally['ZERO']} unavailable={tally['UNAVAILABLE']} "
           f"errors={tally['ERROR']} fresh_run_records={current_run_count if current_run_count is not None else 'not-required'}")
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2))
@@ -199,7 +254,7 @@ def main(argv=None) -> int:
 
     if tally["ERROR"]:
         return 2
-    if tally["ZERO"]:
+    if tally["ZERO"] or tally["UNAVAILABLE"]:
         return 1
     if freshness_error:
         if not args.quiet:

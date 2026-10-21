@@ -1,9 +1,57 @@
 """Unit tests for the management-dashboard builder (no live OCI)."""
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from oci_zpr_visibility import dashboard, deploy_dashboard
 
 FAKE_CMPT = "fake-compartment"
+
+
+class ImportOwnershipTests(unittest.TestCase):
+    def candidate(self):
+        return {"displayName": "view", "dashboardId": "temporary", "freeformTags": {"platform": "oci-zpr-visibility"},
+                "savedSearches": [{"id": "temporary-search", "displayName": "tile"}],
+                "tiles": [{"savedSearchId": "temporary-search"}]}
+
+    @patch("oci_zpr_visibility.deploy_dashboard.oci.pagination.list_call_get_all_results")
+    def test_preserves_dashboard_and_search_ids_and_etag(self, listed):
+        listed.return_value.data = [SimpleNamespace(dashboard_id="existing")]
+        md = Mock()
+        md.get_management_dashboard.return_value = SimpleNamespace(
+            headers={"etag": "revision"}, data=SimpleNamespace(
+                dashboard_id="existing", freeform_tags={"platform": "oci-zpr-visibility", "owner": "operator"},
+                defined_tags={}, saved_searches=[SimpleNamespace(display_name="tile", id="existing-search")]))
+        original = self.candidate()
+        [(item, etag)] = deploy_dashboard.prepare_dashboard_imports(md, [original], FAKE_CMPT)
+        self.assertEqual(item["dashboardId"], "existing")
+        self.assertEqual(item["tiles"][0]["savedSearchId"], "existing-search")
+        self.assertEqual(item["savedSearches"][0]["id"], "existing-search")
+        self.assertEqual(item["freeformTags"]["owner"], "operator")
+        self.assertEqual(etag, "revision")
+        self.assertEqual(original["dashboardId"], "temporary")
+        md.delete_management_dashboard.assert_not_called()
+
+    @patch("oci_zpr_visibility.deploy_dashboard.oci.pagination.list_call_get_all_results")
+    def test_refuses_ambiguous_names(self, listed):
+        listed.return_value.data = [Mock(), Mock()]
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            deploy_dashboard.prepare_dashboard_imports(Mock(), [self.candidate()], FAKE_CMPT)
+
+    @patch("oci_zpr_visibility.deploy_dashboard.oci.pagination.list_call_get_all_results")
+    def test_refuses_unowned_dashboard(self, listed):
+        listed.return_value.data = [SimpleNamespace(dashboard_id="other")]
+        md = Mock()
+        md.get_management_dashboard.return_value.data.freeform_tags = {}
+        with self.assertRaisesRegex(ValueError, "not owned"):
+            deploy_dashboard.prepare_dashboard_imports(md, [self.candidate()], FAKE_CMPT)
+
+    @patch("oci_zpr_visibility.deploy_dashboard.oci.pagination.list_call_get_all_results")
+    def test_missing_dashboard_is_additive(self, listed):
+        listed.return_value.data = []
+        [(item, etag)] = deploy_dashboard.prepare_dashboard_imports(Mock(), [self.candidate()], FAKE_CMPT)
+        self.assertEqual(item["dashboardId"], "temporary")
+        self.assertIsNone(etag)
 
 
 class BuildManagementDashboardTests(unittest.TestCase):
@@ -74,3 +122,10 @@ class BuildManagementDashboardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_builder_can_bind_every_search_to_exact_log_group():
+    suite = deploy_dashboard.build_management_dashboards(dashboard.load_dashboard(), FAKE_CMPT, log_group_id='expected-group')
+    for d in suite:
+        for search in d['savedSearches']:
+            assert "and 'Log Group' = 'expected-group'" in search['uiConfig']['queryString'].split('|', 1)[0]

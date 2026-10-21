@@ -33,7 +33,7 @@ def cmd_enable_zpr(args: argparse.Namespace) -> int:
 
 
 def cmd_collect(args: argparse.Namespace) -> int:
-    collector = ZprCollector(_session(args))
+    collector = ZprCollector(_session(args), compartment_ids=args.collection_compartment_id)
     snapshot = collector.collect(include_resources=not args.skip_resources, resource_query=args.resource_query)
     records = collector.records_for_snapshot(snapshot)
     findings = generate_findings(snapshot, [r for r in records if r.get("record_type") == "zpr_policy_statement"])
@@ -188,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--records", default="out/zpr_records.jsonl")
     collect.add_argument("--resource-query", default=None)
     collect.add_argument("--skip-resources", action="store_true")
+    collect.add_argument("--collection-compartment-id", action="append", default=None,
+                         help="Observe exactly this compartment; repeat for multiple scopes. Omit for tenancy discovery.")
     collect.add_argument("--emit-log-id", default=None)
     collect.add_argument("--batch-size", type=int, default=100)
     collect.set_defaults(func=cmd_collect)

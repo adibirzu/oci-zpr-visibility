@@ -39,8 +39,12 @@ jobs:
         with:
           terraform_version: "1.5.7"
       - name: Format check
-        run: terraform -chdir=terraform fmt -check -recursive
+        run: |
+          terraform -chdir=terraform fmt -check -recursive
+          terraform -chdir=orm fmt -check -recursive
       - name: Validate
         run: |
           terraform -chdir=terraform init -backend=false -input=false
           terraform -chdir=terraform validate
+          terraform -chdir=orm init -backend=false -input=false
+          terraform -chdir=orm validate

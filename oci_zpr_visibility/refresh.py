@@ -41,11 +41,17 @@ def main(argv=None) -> int:
     p.add_argument("--region", default=None)
     p.add_argument("--state-bucket", required=True, help="Object Storage bucket holding previous-run state")
     p.add_argument("--log-group-name", default="zpr-visibility-la")
+    p.add_argument("--log-group-compartment-id", default=None,
+                   help="Compartment for the Log Analytics log group. Defaults to the tenancy.")
     p.add_argument("--skip-resources", action="store_true")
+    p.add_argument("--collection-compartment-id", action="append", default=None,
+                   help="Observe exactly this compartment; repeat for multiple scopes. Omit for tenancy discovery.")
     p.add_argument("--flow-log-group-id", default=None,
                    help="OCI Logging log group OCID holding VCN Flow Logs. When set, refresh "
                         "fetches + correlates flows into zpr_enriched_flow records (traffic KPIs).")
     p.add_argument("--flow-log-id", default=None, help="VCN Flow Log OCID within the flow log group.")
+    p.add_argument("--flow-vcn-id", default=None,
+                   help="Require the existing flow log to observe this VCN or one of its subnets/VNICs.")
     p.add_argument("--flow-log-compartment-id", default=None,
                    help="Compartment OCID containing the VCN Flow Log. Defaults to the session tenancy.")
     p.add_argument("--flow-lookback-minutes", type=int, default=60,
@@ -54,9 +60,19 @@ def main(argv=None) -> int:
     p.add_argument("--quiet", action="store_true", help="suppress target identifiers from command output")
     args = p.parse_args(argv)
 
+    flow_flags = (args.flow_log_group_id, args.flow_log_id)
+    if any(flow_flags) and not all(flow_flags):
+        p.error("--flow-log-group-id and --flow-log-id must be supplied together")
+    if args.flow_vcn_id and not all(flow_flags):
+        p.error("--flow-vcn-id requires --flow-log-group-id and --flow-log-id")
+    if args.flow_log_compartment_id and not all(flow_flags):
+        p.error("--flow-log-compartment-id requires --flow-log-group-id and --flow-log-id")
+    if args.flow_lookback_minutes <= 0:
+        p.error("--flow-lookback-minutes must be positive")
+
     session = build_session(args.auth, args.config_file, args.profile, args.region)
     run_id = new_run_id()
-    collector = ZprCollector(session)
+    collector = ZprCollector(session, compartment_ids=args.collection_compartment_id)
     snapshot = collector.collect(include_resources=not args.skip_resources)
     records = collector.records_for_snapshot(snapshot)
     policy_records = [r for r in records if r.get("record_type") == "zpr_policy_statement"]
@@ -80,6 +96,7 @@ def main(argv=None) -> int:
             raw_flows = fetch_flow_logs(
                 session, flow_compartment_id, args.flow_log_group_id, args.flow_log_id,
                 start.strftime(fmt), end.strftime(fmt),
+                **({"expected_vcn_id": args.flow_vcn_id} if args.flow_vcn_id else {}),
             )
             flows = correlate_flow_records(raw_flows, snapshot, policy_records)
             flow_collection_status = FLOW_STATUS_SUCCEEDED
@@ -120,6 +137,8 @@ def main(argv=None) -> int:
 
     prov_argv = ["--auth", args.auth, "--profile", args.profile,
                  "--log-group-name", args.log_group_name, "--upload", records_path]
+    if args.log_group_compartment_id:
+        prov_argv += ["--log-group-compartment-id", args.log_group_compartment_id]
     if args.region:
         prov_argv += ["--region", args.region]
     if args.config_file:
@@ -140,17 +159,18 @@ def main(argv=None) -> int:
     published = 0
     try:
         from .metrics import publish_metrics
-        published = publish_metrics(session, all_records)
+        published = publish_metrics(session, all_records, compartment_id=args.log_group_compartment_id)
     except Exception as exc:  # noqa: BLE001 - metrics are best-effort
         if not args.quiet:
             print(f"WARN: metric publish failed: {describe_exception(exc)}", file=sys.stderr)
 
+    uploaded = len(all_records) if rc == 0 else 0
     emit(
         {"run_id": run_id, "records": len(records), "findings": len(findings), "drift": len(drift),
-         "flows": len(flows), "uploaded": len(all_records), "metrics_published": published,
+         "flows": len(flows), "uploaded": uploaded, "metrics_published": published,
          "provision_rc": rc},
         f"refresh: {len(records)} records, {len(findings)} findings, {len(drift)} drift, "
-        f"{len(flows)} flows -> uploaded {len(all_records)}, {published} metrics (provision rc={rc})",
+        f"{len(flows)} flows -> uploaded {uploaded}, {published} metrics (provision rc={rc})",
         args.json,
     )
     return rc

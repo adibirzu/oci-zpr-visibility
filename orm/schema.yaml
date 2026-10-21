@@ -6,16 +6,30 @@ locale: "en"
 
 variableGroups:
   - title: "Placement"
-    variables: ["compartment_ocid", "region", "availability_domain"]
+    variables: ["installation_id", "name_prefix", "compartment_ocid", "observation_compartment_ocid", "collection_compartment_ocids", "region", "availability_domain"]
+  - title: "Network ownership"
+    variables: ["network_mode", "existing_vcn_ocid", "existing_controller_subnet_ocid", "existing_flow_log_group_ocid", "existing_flow_log_ocid"]
   - title: "Lab"
     variables: ["instance_image_ocid", "ssh_public_key"]
   - title: "Autonomy"
-    variables: ["deployment_mode", "function_image"]
+    variables: ["deployment_mode", "controller_assign_public_ip", "function_image"]
   - title: "Hidden"
     variables: ["tenancy_ocid", "package_tarball_path"]
     visible: false
 
 variables:
+  installation_id:
+    type: string
+    title: "Installation ID"
+    description: "Stable identifier retained for upgrades. Use a distinct value for a separate observer stack."
+    default: "zpr-visibility"
+    required: true
+  name_prefix:
+    type: string
+    title: "Installation name prefix"
+    description: "Display-name alias for installation ID; its default preserves existing customized installation IDs during upgrades."
+    default: "zpr-visibility"
+    required: true
   compartment_ocid:
     type: oci:identity:compartment:id
     title: "Compartment"
@@ -25,6 +39,58 @@ variables:
     type: oci:identity:region:name
     title: "Region"
     required: true
+  observation_compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Observation compartment"
+    description: "Compartment containing the existing flow-log group/log; defaults to the deployment compartment."
+    required: false
+  collection_compartment_ocids:
+    type: list
+    valueType: string
+    title: "Collection compartments"
+    description: "Optional exact, non-empty compartment OCIDs for inventory collection. Leave the value unset for mode defaults."
+    required: false
+  network_mode:
+    type: enum
+    title: "Network ownership"
+    description: "Lab creates a tagged VCN, endpoints, and flow log. Existing observes supplied resources without changing them or creating demo endpoints."
+    enum:
+      - lab
+      - existing
+    default: lab
+    required: true
+  existing_vcn_ocid:
+    type: oci:core:vcn:id
+    title: "Existing VCN"
+    dependsOn:
+      compartmentId: ${compartment_ocid}
+    description: "Required only for network mode existing."
+    required: false
+    visible:
+      eq: [network_mode, existing]
+  existing_controller_subnet_ocid:
+    type: oci:core:subnet:id
+    title: "Existing observer subnet"
+    description: "Required only for network mode existing; must belong to the selected VCN."
+    required: false
+    visible:
+      eq: [network_mode, existing]
+    dependsOn:
+      compartmentId: ${compartment_ocid}
+      vcnId: ${existing_vcn_ocid}
+  existing_flow_log_group_ocid:
+    type: string
+    title: "Existing flow-log group"
+    required: false
+    visible:
+      eq: [network_mode, existing]
+  existing_flow_log_ocid:
+    type: string
+    title: "Existing flow log"
+    description: "Existing service flow log to observe; it is never reconfigured by this stack."
+    required: false
+    visible:
+      eq: [network_mode, existing]
   availability_domain:
     type: oci:identity:availabilitydomain:name
     title: "Availability Domain"
@@ -34,12 +100,35 @@ variables:
   instance_image_ocid:
     type: oci:core:image:id
     title: "Oracle Linux 9 image (E3.Flex)"
-    description: "Image for the web/db endpoint VMs (and the controller VM, if that mode is selected)."
+    description: "Image for lab web/db endpoints and the observer controller VM, if selected."
     required: true
     dependsOn:
       compartmentId: ${compartment_ocid}
+  vcn_cidr_block:
+    type: string
+    title: "Lab VCN CIDR"
+    description: "Non-overlapping CIDR for lab mode; two /24 subnets are derived from it."
+    default: "10.20.0.0/16"
+    required: false
+    visible:
+      eq: [network_mode, lab]
+  instance_shape:
+    type: string
+    title: "Instance Flex shape"
+    default: "VM.Standard.E3.Flex"
+    required: false
+  instance_ocpus:
+    type: number
+    title: "Instance OCPUs"
+    default: 1
+    required: false
+  instance_memory_gbs:
+    type: number
+    title: "Instance memory (GB)"
+    default: 8
+    required: false
   ssh_public_key:
-    type: oci:core:ssh:publickey
+    type: string
     title: "SSH public key (optional)"
     required: false
   deployment_mode:
@@ -51,10 +140,15 @@ variables:
       - function
     default: controller_vm
     required: true
+  controller_assign_public_ip:
+    type: boolean
+    title: "Assign public IP to observer controller"
+    description: "Leave unset for public lab controller / private existing-network controller. Private mode needs configured egress."
+    required: false
   function_image:
     type: string
     title: "Function image (OCIR)"
-    description: "OCIR image built with 'fn deploy', e.g. <region>.ocir.io/<namespace>/zpr-visibility-refresh:0.0.1. Leave blank to create only the Functions application + IAM now and add the function later. Only used when Autonomy mode = function."
+    description: "OCIR image built with 'fn deploy', e.g. <region>.ocir.io/<namespace>/zpr-visibility-refresh:0.0.1. Leave blank to create only the Functions application now and add the function later. The dynamic group grants access only to the Terraform-managed function after its image is supplied. Only used when Autonomy mode = function."
     required: false
     visible:
       eq:

@@ -2,7 +2,7 @@
 """Provision OCI Log Analytics content for ZPR visibility.
 
 Idempotently creates:
-  * custom fields (display name == the bare token used in dashboard queries)
+  * fields (reuse semantic display names; create missing typed fields)
   * a JSON parser mapping each record JSON key to its field
   * a source named "OCI ZPR Visibility JSON" (matches the dashboard 'Log Source')
   * a Log Analytics log group (target for ingestion / Connector Hub)
@@ -50,12 +50,13 @@ def _say(message: str = "") -> None:
     if not _QUIET:
         print(message)
 
-# JSON key -> display name (display name is what dashboard queries reference).
-# Display name is kept identical to the JSON key so queries use bare tokens.
+# JSON keys mapped to fields; most retain their token as display name. Explicit
+# semantic aliases below are quoted in dashboard queries.
 FIELD_TOKENS = [
     "schema_version", "run_id", "event_time", "inventory_snapshot_time",
     "record_type", "policy_id", "policy_name", "policy_lifecycle_state",
-    "statement", "statement_hash", "statement_index", "action", "source_attribute",
+    "statement", "statement_hash", "statement_index", "attribute_references", "cidrs", "ips",
+    "action", "source_attribute",
     "destination_attribute", "network_scope", "target_type", "parser_confidence",
     "resource_id", "resource_name", "resource_type", "compartment_id", "region",
     "vcn_id", "subnet_id", "vnic_id", "private_ip", "security_attributes",
@@ -79,7 +80,24 @@ FIELD_TOKENS = [
     "finding_count", "drift_count", "flow_count", "collection_error_count",
     "coverage_status", "eligible_count", "protected_count",
     "collection_service", "collection_operation", "error_category", "occurrence_count",
+    # resource-estate inventory records (latest observation per resource)
+    "lifecycle_state", "protection_status", "inventory_status", "cluster_id", "subnet_ids",
+    "availability_domain", "fault_domain", "available_count",
 ]
+
+# Reuse semantically matching fields rather than consuming another STRING
+# slot for every JSON spelling. Queries use these quoted display names.
+FIELD_DISPLAY_NAMES = {
+    "collection_operation": "Operation",
+    "error_category": "Error Type",
+    "lifecycle_state": "Lifecycle State",
+    "protection_status": "Protection Level",
+    "inventory_status": "Status",
+    "cluster_id": "Kubernetes Cluster ID",
+    "availability_domain": "Availability Domain",
+}
+FIELD_TYPES = {"available_count": "LONG"}
+MULTI_VALUE_FIELDS = {"subnet_ids", "attribute_references", "cidrs", "ips"}
 
 SAMPLE_CONTENT = (
     '{"record_type":"zpr_finding","event_time":"2026-06-03T10:00:00Z",'
@@ -99,34 +117,46 @@ def _client(auth: str, config_file: str | None, profile: str, region: str):
 def ensure_fields(la, ns) -> dict[str, str]:
     """Return {token: internal_name} for every token.
 
-    Reuse any existing field whose display name matches case-insensitively
+    Reuse any existing field whose target display name matches case-insensitively
     (LA display names are case-insensitive-unique, so a token like "action"
     collides with the system field "Action"); create the rest as custom.
     Dashboard queries resolve field references case-insensitively, so reusing
     the system field is correct.
     """
     m = oci.log_analytics.models
-    by_lower = {
-        f.display_name.lower(): f.name
-        for f in oci.pagination.list_call_get_all_results(
-            la.list_fields, namespace_name=ns, limit=2000
-        ).data
-    }
+    existing_fields = oci.pagination.list_call_get_all_results(
+        la.list_fields, namespace_name=ns, limit=2000
+    ).data
+    by_lower = {f.display_name.lower(): f for f in existing_fields}
     mapping: dict[str, str] = {}
     created_n = reused_n = 0
     for token in FIELD_TOKENS:
-        key = token.lower()
+        display_name = FIELD_DISPLAY_NAMES.get(token, token)
+        key = display_name.lower()
         if key in by_lower:
-            mapping[token] = by_lower[key]
+            existing = by_lower[key]
+            expected_type = FIELD_TYPES.get(token, "STRING")
+            expected_multi = token in MULTI_VALUE_FIELDS
+            actual_type = getattr(existing, "data_type", None)
+            actual_multi = getattr(existing, "is_multi_valued", None)
+            if (actual_type is None or str(actual_type).upper() != expected_type
+                    or actual_multi is None or bool(actual_multi) != expected_multi):
+                raise ValueError(
+                    f"incompatible existing Log Analytics field {display_name!r}: "
+                    f"expected data_type={expected_type}, is_multi_valued={expected_multi}; "
+                    f"got data_type={actual_type!r}, is_multi_valued={actual_multi!r}"
+                )
+            mapping[token] = existing.name
             reused_n += 1
             continue
         details = m.UpsertLogAnalyticsFieldDetails(
-            display_name=token, data_type="STRING",
+            display_name=display_name, data_type=FIELD_TYPES.get(token, "STRING"),
+            is_multi_valued=token in MULTI_VALUE_FIELDS,
             description=f"OCI ZPR visibility field: {token}",
         )
         created = la.upsert_field(namespace_name=ns, upsert_log_analytics_field_details=details).data
         mapping[token] = created.name
-        by_lower[key] = created.name
+        by_lower[key] = created
         created_n += 1
         _say(f"  field created: {token} -> {created.name}")
     _say(f"fields ready: {len(mapping)} (created {created_n}, reused {reused_n})")
@@ -269,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--region", default=None)
     p.add_argument("--log-group-name", default="zpr-visibility-la")
+    p.add_argument("--log-group-compartment-id", default=None,
+                   help="Compartment for the Log Analytics log group. Defaults to the tenancy.")
     p.add_argument("--upload", help="JSONL records file to ingest into LA after provisioning")
     p.add_argument("--quiet", action="store_true", help="suppress identifiers and provisioning details")
     args = p.parse_args(argv)
@@ -276,9 +308,10 @@ def main(argv: list[str] | None = None) -> int:
 
     session, la, ns = _client(args.auth, args.config_file, args.profile, args.region)
     tenancy_id = session.tenancy_id
+    log_group_compartment_id = args.log_group_compartment_id or tenancy_id
     _say("Log Analytics namespace resolved")
     field_map = ensure_fields(la, ns)
-    lg_id = ensure_log_group(la, ns, tenancy_id, args.log_group_name)
+    lg_id = ensure_log_group(la, ns, log_group_compartment_id, args.log_group_name)
     parser_name = ensure_parser(la, ns, field_map)
     source_name = ensure_source(la, ns, tenancy_id, parser_name)
 

@@ -23,6 +23,11 @@ ZPR_SUPPORTED_RESOURCE_TYPES = (
     "stream_pool",
 )
 
+# These services are inventory-only in this collector. Their rows deliberately
+# use ``resource_inventory`` and never enter the protected-resource map.
+INVENTORY_RESOURCE_TYPES = ("oke_cluster", "oke_node_pool", "autonomous_database")
+_NON_OPERATIONAL_STATES = frozenset({"DELETED", "TERMINATED", "DELETING", "TERMINATING"})
+
 
 def _list_all(oci: Any, func: Any, *args: Any, **kwargs: Any) -> list[Any]:
     return list(oci.pagination.list_call_get_all_results(func, *args, **kwargs).data)
@@ -63,7 +68,7 @@ def protected_resource_record(
 
 
 class ZprCollector:
-    def __init__(self, session: OciSession) -> None:
+    def __init__(self, session: OciSession, compartment_ids: list[str] | None = None) -> None:
         self.session = session
         self.oci = session.oci
         self.collection_errors: list[dict[str, Any]] = []
@@ -72,6 +77,18 @@ class ZprCollector:
         self.coverage_failures: set[str] = set()
         self.compartment_scope_complete = True
         self._collection_error_index: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
+        self._extended_inventory_attempted = False
+        self._scope_cache: list[str] | None = None
+        self._base_inventory: list[dict[str, Any]] = []
+        # A caller may provide an explicit, already-authorized scope. This is
+        # also useful for fixture tests and avoids silently broadening a run.
+        if compartment_ids is None:
+            self._explicit_compartment_ids: tuple[str, ...] | None = None
+        else:
+            cleaned = tuple(dict.fromkeys(str(cid).strip() for cid in compartment_ids))
+            if not cleaned or any(not cid for cid in cleaned):
+                raise ValueError("compartment_ids must contain at least one non-empty ID")
+            self._explicit_compartment_ids = cleaned
 
     def enable_zpr(self, dry_run: bool = False) -> dict[str, Any]:
         zpr = client(self.session, "zpr.ZprClient")
@@ -87,6 +104,9 @@ class ZprCollector:
         self.coverage_failures = set()
         self.compartment_scope_complete = True
         self._collection_error_index = {}
+        self._extended_inventory_attempted = False
+        self._scope_cache = None
+        self._base_inventory = []
         snapshot_time = utc_now_iso()
         snapshot: dict[str, Any] = {
             "snapshot_time": snapshot_time,
@@ -97,6 +117,7 @@ class ZprCollector:
             "security_attribute_namespaces": [],
             "security_attributes": [],
             "resources": [],
+            "resource_inventory": [],
             "ip_resource_map": [],
             "collection_errors": [],
             "collection_error_count": 0,
@@ -110,6 +131,10 @@ class ZprCollector:
             resources = self._collect_resources(resource_query)
             snapshot["resources"] = resources
             snapshot["ip_resource_map"] = self._build_ip_map(resources)
+            snapshot["resource_inventory"] = [
+                *getattr(self, "_base_inventory", []),
+                *self._collect_extended_inventory(),
+            ]
 
         snapshot["collection_errors"] = list(self.collection_errors)
         snapshot["collection_error_count"] = self.collection_error_count
@@ -143,6 +168,14 @@ class ZprCollector:
                     "security_attributes": ",".join(render_attributes(attrs)),
                 }
             )
+        records.extend(
+            {
+                **row,
+                "snapshot_time": row.get("snapshot_time", snapshot_time),
+                "event_time": row.get("event_time", snapshot_time),
+            }
+            for row in snapshot.get("resource_inventory", [])
+        )
         records.extend(snapshot.get("resource_coverage", []))
         records.extend(snapshot.get("collection_errors", []))
         return records
@@ -186,9 +219,12 @@ class ZprCollector:
         # scanned, so every implemented collector saw a partial tenancy even
         # when its own list calls all succeeded.
         scope_incomplete = not self.compartment_scope_complete
-        for resource_type in ZPR_SUPPORTED_RESOURCE_TYPES:
+        coverage_types = list(dict.fromkeys(ZPR_SUPPORTED_RESOURCE_TYPES))
+        if self._extended_inventory_attempted:
+            coverage_types = list(dict.fromkeys((*coverage_types, *INVENTORY_RESOURCE_TYPES)))
+        for resource_type in coverage_types:
             counts = self.coverage_counts.get(resource_type, {})
-            implemented = resource_type in {"vcn", "instance"}
+            implemented = resource_type in {"vcn", "instance", *INVENTORY_RESOURCE_TYPES}
             if not (include_resources and implemented):
                 status = "NOT_COLLECTED"
             elif scope_incomplete or resource_type in self.coverage_failures:
@@ -204,6 +240,7 @@ class ZprCollector:
                     "coverage_status": status,
                     "eligible_count": counts.get("eligible") if status in {"COLLECTED", "PARTIAL"} else None,
                     "protected_count": counts.get("protected") if status in {"COLLECTED", "PARTIAL"} else None,
+                    "available_count": counts.get("available") if resource_type in INVENTORY_RESOURCE_TYPES and status in {"COLLECTED", "PARTIAL"} else None,
                 }
             )
         return records
@@ -251,6 +288,11 @@ class ZprCollector:
 
     def _compartment_ids(self) -> list[str]:
         """Tenancy root + all ACTIVE subtree compartments (best-effort)."""
+        if self._scope_cache is not None:
+            return list(self._scope_cache)
+        if self._explicit_compartment_ids is not None:
+            self._scope_cache = list(self._explicit_compartment_ids)
+            return list(self._scope_cache)
         ids = [self.session.tenancy_id]
         try:
             identity = client(self.session, "identity.IdentityClient")
@@ -266,7 +308,120 @@ class ZprCollector:
             self._collection_error(
                 service="Identity", operation="list_compartments", resource_type=None, exc=exc
             )
-        return ids
+        self._scope_cache = ids
+        return list(ids)
+
+    @staticmethod
+    def _operational(resource: Any) -> bool:
+        return str(getattr(resource, "lifecycle_state", "") or "").upper() not in _NON_OPERATIONAL_STATES
+
+    @staticmethod
+    def _inventory_record(resource: Any, *, resource_type: str, compartment_id: str,
+                          region: str | None, cluster_id: str | None = None,
+                          security_attributes_supported: bool = False,
+                          inventory_status: str = "OPERATIONAL") -> dict[str, Any]:
+        """Serialize provider inventory fields without inferring protection."""
+        record: dict[str, Any] = {
+            "record_type": "resource_inventory",
+            "resource_id": getattr(resource, "id", None),
+            "resource_name": getattr(resource, "name", None) or getattr(resource, "display_name", None),
+            "resource_type": resource_type,
+            "compartment_id": getattr(resource, "compartment_id", None) or compartment_id,
+            "region": region,
+            "lifecycle_state": getattr(resource, "lifecycle_state", None),
+            "inventory_status": inventory_status,
+            "protection_status": "UNATTRIBUTED" if security_attributes_supported else "ATTRIBUTE_EVIDENCE_UNAVAILABLE",
+        }
+        if cluster_id:
+            record["cluster_id"] = cluster_id
+        for source, target in (("vcn_id", "vcn_id"), ("subnet_id", "subnet_id"),
+                               ("subnet_ids", "subnet_ids"), ("availability_domain", "availability_domain"),
+                               ("fault_domain", "fault_domain"),
+                               ("security_attributes", "security_attributes")):
+            value = getattr(resource, source, None)
+            if value is not None:
+                record[target] = to_plain(value)
+                if source == "security_attributes":
+                    record["protection_status"] = "ATTRIBUTES_PRESENT" if value else "UNATTRIBUTED"
+        return record
+
+    def _collect_extended_inventory(self) -> list[dict[str, Any]]:
+        """Collect OKE topology and Autonomous Database inventory in scope."""
+        self._extended_inventory_attempted = True
+        compartment_ids = self._compartment_ids()
+        records: list[dict[str, Any]] = []
+        try:
+            oke = client(self.session, "container_engine.ContainerEngineClient")
+            for cid in compartment_ids:
+                try:
+                    clusters = _list_all(self.oci, oke.list_clusters, cid)
+                    counts = self.coverage_counts.setdefault("oke_cluster", {"eligible": 0, "available": 0})
+                    for cluster in clusters:
+                        if not self._operational(cluster):
+                            records.append(self._inventory_record(cluster, resource_type="oke_cluster", compartment_id=cid, region=self.session.region, inventory_status="TERMINAL"))
+                            continue
+                        counts["eligible"] += 1
+                        counts["available"] += 1 if str(getattr(cluster, "lifecycle_state", "")).upper() == "ACTIVE" else 0
+                        records.append(self._inventory_record(cluster, resource_type="oke_cluster", compartment_id=cid, region=self.session.region))
+                        try:
+                            pools = _list_all(self.oci, oke.list_node_pools, cid, cluster_id=getattr(cluster, "id", None))
+                            pool_counts = self.coverage_counts.setdefault("oke_node_pool", {"eligible": 0, "available": 0})
+                            for pool in pools:
+                                if not self._operational(pool):
+                                    records.append(self._inventory_record(pool, resource_type="oke_node_pool", compartment_id=cid, region=self.session.region, cluster_id=getattr(cluster, "id", None), inventory_status="TERMINAL"))
+                                    continue
+                                pool_counts["eligible"] += 1
+                                pool_counts["available"] += 1 if str(getattr(pool, "lifecycle_state", "")).upper() == "ACTIVE" else 0
+                                pool_record = self._inventory_record(pool, resource_type="oke_node_pool", compartment_id=cid, region=self.session.region, cluster_id=getattr(cluster, "id", None))
+                                if not pool_record.get("vcn_id") and getattr(cluster, "vcn_id", None):
+                                    pool_record["vcn_id"] = cluster.vcn_id
+                                records.append(pool_record)
+                        except Exception as exc:
+                            self._collection_error(service="ContainerEngine", operation="list_node_pools", resource_type="oke_node_pool", exc=exc)
+                except Exception as exc:
+                    self.coverage_failures.add("oke_node_pool")
+                    self._collection_error(service="ContainerEngine", operation="list_clusters", resource_type="oke_cluster", exc=exc)
+        except Exception as exc:
+            self.coverage_failures.add("oke_node_pool")
+            self._collection_error(service="ContainerEngine", operation="client", resource_type="oke_cluster", exc=exc)
+
+        try:
+            database = client(self.session, "database.DatabaseClient")
+            subnet_vcns: dict[str, str] = {}
+            for cid in compartment_ids:
+                try:
+                    databases = _list_all(self.oci, database.list_autonomous_databases, cid)
+                    counts = self.coverage_counts.setdefault("autonomous_database", {"eligible": 0, "available": 0})
+                    for db in databases:
+                        if not self._operational(db):
+                            records.append(self._inventory_record(db, resource_type="autonomous_database", compartment_id=cid, region=self.session.region, security_attributes_supported=True, inventory_status="TERMINAL"))
+                            continue
+                        counts["eligible"] += 1
+                        counts["available"] += 1 if str(getattr(db, "lifecycle_state", "")).upper() in {"AVAILABLE", "AVAILABLE_NEEDS_ATTENTION"} else 0
+                        record = self._inventory_record(db, resource_type="autonomous_database", compartment_id=cid, region=self.session.region, security_attributes_supported=True)
+                        # ADB returns its private-endpoint subnet, but no VCN.
+                        # Resolve the actual subnet rather than leaving placement
+                        # blank or inferring it from the deployment compartment.
+                        if record.get("subnet_id") and not record.get("vcn_id"):
+                            subnet_id = record["subnet_id"]
+                            try:
+                                if subnet_id not in subnet_vcns:
+                                    network = client(self.session, "core.VirtualNetworkClient")
+                                    subnet = network.get_subnet(subnet_id).data
+                                    if not getattr(subnet, "vcn_id", None):
+                                        raise ValueError("Subnet response has no VCN placement")
+                                    subnet_vcns[subnet_id] = subnet.vcn_id
+                                record["vcn_id"] = subnet_vcns[subnet_id]
+                            except Exception as exc:
+                                self._collection_error(service="Networking", operation="get_subnet", resource_type="autonomous_database", exc=exc)
+                        if record.get("protection_status") == "ATTRIBUTES_PRESENT":
+                            counts["protected"] = counts.get("protected", 0) + 1
+                        records.append(record)
+                except Exception as exc:
+                    self._collection_error(service="Database", operation="list_autonomous_databases", resource_type="autonomous_database", exc=exc)
+        except Exception as exc:
+            self._collection_error(service="Database", operation="client", resource_type="autonomous_database", exc=exc)
+        return records
 
     def _collect_resources(self, query: str | None) -> list[dict[str, Any]]:
         """Enumerate ZPR-protectable resources (VCNs, instances) via Core APIs.
@@ -279,20 +434,32 @@ class ZprCollector:
         compute = client(self.session, "core.ComputeClient")
         region = self.session.region
         resources: list[dict[str, Any]] = []
+        inventory: list[dict[str, Any]] = []
         for cid in self._compartment_ids():
             try:
                 vcns = _list_all(self.oci, net.list_vcns, cid)
                 counts = self.coverage_counts.setdefault("vcn", {"eligible": 0, "protected": 0})
-                counts["eligible"] += len(vcns)
                 for vcn in vcns:
-                    rec = protected_resource_record(
-                        getattr(vcn, "security_attributes", None),
-                        resource_id=vcn.id, resource_name=vcn.display_name, resource_type="Vcn",
-                        compartment_id=cid, region=region, vcn_id=vcn.id,
-                    )
-                    if rec:
-                        resources.append(rec)
-                        counts["protected"] += 1
+                    if self._operational(vcn):
+                        counts["eligible"] += 1
+                        inventory.append(self._inventory_record(
+                            vcn, resource_type="vcn", compartment_id=cid,
+                            region=region, security_attributes_supported=True,
+                        ))
+                        rec = protected_resource_record(
+                            getattr(vcn, "security_attributes", None),
+                            resource_id=vcn.id, resource_name=vcn.display_name, resource_type="Vcn",
+                            compartment_id=cid, region=region, vcn_id=vcn.id,
+                        )
+                        if rec:
+                            resources.append(rec)
+                            counts["protected"] += 1
+                    elif getattr(vcn, "lifecycle_state", None) in _NON_OPERATIONAL_STATES:
+                        inventory.append(self._inventory_record(
+                            vcn, resource_type="vcn", compartment_id=cid,
+                            region=region, security_attributes_supported=True,
+                            inventory_status="TERMINAL",
+                        ))
             except Exception as exc:
                 self._collection_error(
                     service="Networking", operation="list_vcns", resource_type="vcn", exc=exc
@@ -300,25 +467,39 @@ class ZprCollector:
             try:
                 instances = _list_all(self.oci, compute.list_instances, cid)
                 counts = self.coverage_counts.setdefault("instance", {"eligible": 0, "protected": 0})
-                counts["eligible"] += len(instances)
                 for inst in instances:
-                    rec = protected_resource_record(
-                        getattr(inst, "security_attributes", None),
-                        resource_id=inst.id, resource_name=inst.display_name, resource_type="instance",
-                        compartment_id=cid, region=region,
-                    )
-                    if rec:
-                        resources.append(rec)
-                        counts["protected"] += 1
+                    if self._operational(inst):
+                        counts["eligible"] += 1
+                        inventory.append(self._inventory_record(
+                            inst, resource_type="instance", compartment_id=cid,
+                            region=region, security_attributes_supported=True,
+                        ))
+                        rec = protected_resource_record(
+                            getattr(inst, "security_attributes", None),
+                            resource_id=inst.id, resource_name=inst.display_name, resource_type="instance",
+                            compartment_id=cid, region=region,
+                        )
+                        if rec:
+                            resources.append(rec)
+                            counts["protected"] += 1
+                    elif getattr(inst, "lifecycle_state", None) in _NON_OPERATIONAL_STATES:
+                        inventory.append(self._inventory_record(
+                            inst, resource_type="instance", compartment_id=cid,
+                            region=region, security_attributes_supported=True,
+                            inventory_status="TERMINAL",
+                        ))
             except Exception as exc:
                 self._collection_error(
                     service="Compute", operation="list_instances", resource_type="instance", exc=exc
                 )
-        return self._enrich_compute_vnics(resources)
+        enriched = self._enrich_compute_vnics([*resources, *inventory])
+        self._base_inventory = [row for row in enriched if row.get("record_type") == "resource_inventory"]
+        return [row for row in enriched if row.get("record_type") != "resource_inventory"]
 
     def _enrich_compute_vnics(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
         compute = client(self.session, "core.ComputeClient")
         network = client(self.session, "core.VirtualNetworkClient")
+        subnet_vcns: dict[str, str] = {}
         enriched: list[dict[str, Any]] = []
         for resource in resources:
             if str(resource.get("resource_type", "")).lower() not in {"instance", "computeinstance"}:
@@ -339,13 +520,26 @@ class ZprCollector:
                     if not vnic_id:
                         continue
                     vnic = network.get_vnic(vnic_id).data
+                    subnet_id = getattr(vnic, "subnet_id", None)
+                    vcn_id = getattr(vnic, "vcn_id", None)
+                    if subnet_id and not vcn_id:
+                        try:
+                            if subnet_id not in subnet_vcns:
+                                subnet = network.get_subnet(subnet_id).data
+                                if not getattr(subnet, "vcn_id", None):
+                                    raise ValueError("Subnet response has no VCN placement")
+                                subnet_vcns[subnet_id] = subnet.vcn_id
+                            vcn_id = subnet_vcns[subnet_id]
+                        except Exception as exc:
+                            self._collection_error(service="Networking", operation="get_subnet", resource_type="instance", exc=exc)
                     private_ips = _list_all(self.oci, network.list_private_ips, vnic_id=vnic_id)
                     for private_ip in private_ips or [None]:
                         enriched.append(
                             {
                                 **resource,
                                 "vnic_id": vnic_id,
-                                "subnet_id": getattr(vnic, "subnet_id", None),
+                                "vcn_id": vcn_id,
+                                "subnet_id": subnet_id,
                                 "private_ip": getattr(private_ip, "ip_address", None) if private_ip else getattr(vnic, "private_ip", None),
                             }
                         )

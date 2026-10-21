@@ -1,0 +1,36 @@
+[
+  {
+    "article": "Analyze OCI ZPR data in Log Analytics: collect, ingest and verify",
+    "images": [
+      {
+        "file": "collection-health-latest.png",
+        "alt": "Native Log Analytics collection-health dashboard showing run metadata and collection statuses"
+      },
+      {
+        "file": "policy-fields.png",
+        "alt": "Native policy-inventory dashboard showing statement metadata and resource relationships"
+      }
+    ]
+  },
+  {
+    "article": "Investigate OCI ZPR traffic with Log Analytics dashboards",
+    "images": [
+      {
+        "file": "traffic-latest.png",
+        "alt": "Native Log Analytics traffic dashboard showing actions, review trends and capture quality"
+      },
+      {
+        "file": "adb-placement.png",
+        "alt": "Native resource-estate dashboard with Autonomous Database lifecycle rows"
+      },
+      {
+        "file": "compute-placement.png",
+        "alt": "Native Compute and OKE tables showing real private IPs, shortened OCIDs and lifecycle state"
+      },
+      {
+        "file": "collection-health-latest.png",
+        "alt": "Latest native collection-health table showing successful manual runs and flow counts"
+      }
+    ]
+  }
+]

@@ -32,3 +32,6 @@ docs/evidence/screenshots/raw/
 # Exported article PDFs (review artifacts, not committed)
 docs/*.pdf
 docs/_pdf_build_*.html
+
+# Private local provider-snapshot review surfaces
+.lavish/

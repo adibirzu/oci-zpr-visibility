@@ -19,7 +19,7 @@ below it shows the parsed fields. See
 
 ## Record discriminator: `record_type`
 
-Every record carries a `record_type`. There are eight, each a different lens on
+Every record carries a `record_type`. There are nine, each a different lens on
 ZPR. Common envelope fields are `schema_version`, opaque `run_id`, `record_type`,
 `event_time` (→ **Time**), and `inventory_snapshot_time`. The run ID contains no
 tenant, resource, or topology information and binds live validation to the exact
@@ -52,6 +52,21 @@ collector run that produced the evidence.
 | `policy_name`, `cidr`, `attribute_reference` | context |
 | `resource_name`, `resource_type`, `security_attributes` | affected resource |
 | `recommendation` | remediation guidance |
+
+### 9. `resource_inventory` — extended service inventory
+
+One row describes an operational OKE cluster, node pool, or Autonomous
+Database in the explicitly scanned compartment scope. Fields include
+`resource_id`, `resource_name`, `resource_type`, `compartment_id`, `region`,
+`lifecycle_state`, and provider-exposed placement (`vcn_id`, `subnet_id`,
+`subnet_ids`, or `availability_domain`). Autonomous Database rows retain
+`security_attributes` when returned by the SDK. `protection_status` is
+`ATTRIBUTES_PRESENT`, `UNATTRIBUTED`, or `ATTRIBUTE_EVIDENCE_UNAVAILABLE`;
+`inventory_status` is `OPERATIONAL` or `TERMINAL`. Terminal rows preserve the
+last observed lifecycle state for disappearance detection but are excluded from
+live eligibility and availability counts;
+missing OKE model fields do not prove a resource is unprotected, and inventory
+rows never imply ZPR protection or traffic behavior.
 
 ### 4. `zpr_enriched_flow` — VCN Flow Log correlated to ZPR intent
 | Field | Meaning |

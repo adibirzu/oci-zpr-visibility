@@ -4,7 +4,7 @@
 # Function under a **resource principal** (no instance, no API keys). Terraform
 # cannot build/push the Docker image — that is `fn deploy` from functions/ — so:
 #   * the Functions application + resource-principal IAM are always created in
-#     function mode (so `fn deploy` has an app to target), and
+#     function mode; principal grants exist only for the exact Terraform function, and
 #   * the function resource itself is created only once var.function_image points
 #     at the pushed OCIR image.
 #
@@ -12,17 +12,21 @@
 # Connector Hub, API Gateway, or a scheduler you operate. See docs/deployment-modes.md.
 
 resource "oci_functions_application" "refresh" {
+  depends_on     = [terraform_data.existing_flow_scope]
   count          = local.enable_function ? 1 : 0
   compartment_id = var.compartment_ocid
   display_name   = "${local.name_prefix}-fn-app"
-  subnet_ids     = [oci_core_subnet.controller.id]
+  subnet_ids     = [local.controller_subnet_id]
   config = {
-    STATE_BUCKET            = oci_objectstorage_bucket.state.name
-    REGION                  = var.region
-    LOG_GROUP_NAME          = "${local.name_prefix}-la"
-    FLOW_LOG_COMPARTMENT_ID = var.compartment_ocid
-    FLOW_LOG_GROUP_ID       = oci_logging_log_group.flow.id
-    FLOW_LOG_ID             = oci_logging_log.subnet_flow.id
+    STATE_BUCKET               = oci_objectstorage_bucket.state.name
+    REGION                     = var.region
+    LOG_GROUP_NAME             = "${local.name_prefix}-la"
+    LOG_GROUP_COMPARTMENT_ID   = var.compartment_ocid
+    FLOW_LOG_COMPARTMENT_ID    = local.observation_compartment_id
+    FLOW_LOG_GROUP_ID          = local.flow_log_group_id
+    FLOW_LOG_ID                = local.flow_log_id
+    FLOW_VCN_ID                = local.observed_vcn_id
+    COLLECTION_COMPARTMENT_IDS = jsonencode(local.observation_compartment_ids)
   }
   freeform_tags = local.common_tags
 }
@@ -38,15 +42,15 @@ resource "oci_functions_function" "refresh" {
 }
 
 resource "oci_identity_dynamic_group" "function" {
-  count          = local.enable_function ? 1 : 0
+  count          = local.enable_function && var.function_image != "" ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name_prefix}-fn-dg"
   description    = "ZPR visibility refresh function (resource principal)"
-  matching_rule  = "ALL {resource.type = 'fnfunc', resource.compartment.id = '${var.compartment_ocid}'}"
+  matching_rule  = "ALL {resource.type = 'fnfunc', resource.id = '${oci_functions_function.refresh[0].id}'}"
 }
 
 resource "oci_identity_policy" "function" {
-  count          = local.enable_function ? 1 : 0
+  count          = local.enable_function && var.function_image != "" ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name_prefix}-fn-policy"
   description    = "Least-privilege grants for the ZPR visibility refresh function (resource principal)."

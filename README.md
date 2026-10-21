@@ -109,6 +109,12 @@ a live demo tenancy with identifiers and IPs masked.
 
 ![Over-permissive detection query](docs/evidence/screenshots/redacted/query-over-permissive.png)
 
+The locally implemented [estate views](docs/estate-visibility.md) add Compute,
+VCN, OKE and Autonomous Database last-observed inventory. The
+[ORM existing-network mode](docs/orm-deployment.md) places an observer in a
+supplied VCN/subnet and reads existing flow logs. Both require a fresh live
+acceptance run after deploying the updated package.
+
 ## Use it on your existing ZPR setup
 
 Already running ZPR? Skip the demo lab. `discover` does a read-only survey of your

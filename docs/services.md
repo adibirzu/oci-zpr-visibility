@@ -15,7 +15,7 @@ How the OCI services and project components relate. Complements
                  ▼                    ▼                         ▼
    ┌──────────────────┐   ┌────────────────────┐   ┌────────────────────────┐
    │ Zero Trust Packet│   │ Security Attributes │   │ Resource Search + Core │
-   │ Routing (ZPR)    │   │ (namespaces, attrs) │   │ (instances, VNIC, IP)  │
+   │ Routing (ZPR)    │   │ (namespaces, attrs) │   │ (instances, OKE, ADB)  │
    │ config + policies│   │                     │   │                        │
    └──────────────────┘   └────────────────────┘   └────────────────────────┘
                  │ correlate (IP↔resource, attr↔policy)
@@ -45,7 +45,7 @@ How the OCI services and project components relate. Complements
 |------|----|--------------|-----------|
 | Collector | ZPR | reads config + policies | `ZprClient` (SDK) |
 | Collector | Security Attributes | reads namespaces + attributes | `SecurityAttributeClient` |
-| Collector | Resource Search + Core | finds attributed resources, enriches VNIC/IP | `ResourceSearchClient`, `ComputeClient`, `VirtualNetworkClient` |
+| Collector | Core + Container Engine + Database | finds attributed VCN/instances and inventories OKE/ADB | `ComputeClient`, `VirtualNetworkClient`, `ContainerEngineClient`, `DatabaseClient` |
 | Collector | correlation engine | joins flows↔resources↔policies | local (`correlate.py`, `findings.py`) |
 | Collector | OCI Logging | emits records to custom log | `LoggingClient.put_logs` |
 | Provisioner | Log Analytics | creates fields/parser/source/log group, uploads records | `LogAnalyticsClient` |
@@ -73,3 +73,12 @@ an explicit `INFERRED_NOT_PROVIDER_VERDICT` attribution.
   provisioner. See [runbook.md](runbook.md) for least-privilege statements.
 - All work is scoped to the configured profile/compartment; pre-flight tenancy
   checks are mandatory before any mutation (see global tenancy rules).
+
+Extended inventory accepts an explicit compartment scope and uses lazy SDK
+client imports. OKE and Autonomous Database rows use `resource_inventory`,
+separate from `zpr_resource`; lifecycle and provider-exposed placement fields
+are retained. OKE models do not expose blanket `security_attributes` in the
+installed SDK, so absence is `ATTRIBUTE_EVIDENCE_UNAVAILABLE`. The collector
+does not inherit attributes from parent VCNs or clusters, create IP/VNIC maps,
+or infer ZPR protection. Failed list calls produce collection gaps and partial
+coverage.

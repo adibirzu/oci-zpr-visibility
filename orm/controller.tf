@@ -4,33 +4,63 @@
 
 resource "oci_core_instance" "controller" {
   count               = local.enable_controller ? 1 : 0
+  depends_on          = [terraform_data.existing_flow_scope]
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
   display_name        = "${local.name_prefix}-controller"
-  shape               = "VM.Standard.E3.Flex"
+  shape               = var.instance_shape
   shape_config {
-    ocpus         = 1
-    memory_in_gbs = 8
+    ocpus         = var.instance_ocpus
+    memory_in_gbs = var.instance_memory_gbs
   }
   source_details {
     source_type = "image"
     source_id   = var.instance_image_ocid
   }
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+  agent_config {
+    plugins_config {
+      name          = "Compute Instance Run Command"
+      desired_state = "ENABLED"
+    }
+    plugins_config {
+      name          = "Management Agent"
+      desired_state = "ENABLED"
+    }
+  }
   create_vnic_details {
-    subnet_id        = oci_core_subnet.controller.id
-    assign_public_ip = true
+    subnet_id        = local.controller_subnet_id
+    assign_public_ip = local.controller_assign_public_ip
   }
   metadata = merge(
     {
       user_data = base64encode(templatefile("${path.module}/cloudinit/controller.sh.tftpl", {
-        region              = var.region
-        log_group_name      = "${local.name_prefix}-la"
-        state_bucket        = oci_objectstorage_bucket.state.name
-        pkg_bucket          = oci_objectstorage_bucket.pkg[0].name
-        pkg_object          = oci_objectstorage_object.pkg[0].object
-        flow_compartment_id = var.compartment_ocid
-        flow_log_group_id   = oci_logging_log_group.flow.id
-        flow_log_id         = oci_logging_log.subnet_flow.id
+        region                   = var.region
+        log_group_name           = "${local.name_prefix}-la"
+        log_group_compartment_id = var.compartment_ocid
+        dashboard_compartment_id = var.compartment_ocid
+        state_bucket             = oci_objectstorage_bucket.state.name
+        pkg_bucket               = oci_objectstorage_bucket.pkg[0].name
+        pkg_object               = oci_objectstorage_object.pkg[0].object
+        pkg_sha256               = filesha256(var.package_tarball_path)
+        bootstrap_requirements   = file("${path.module}/bootstrap-requirements.txt")
+        flow_compartment_id      = local.observation_compartment_id
+        flow_log_group_id        = local.flow_log_group_id
+        flow_log_id              = local.flow_log_id
+        flow_vcn_id              = local.observed_vcn_id
+        refresh_config_b64 = base64encode(jsonencode({
+          region                   = var.region
+          state_bucket             = oci_objectstorage_bucket.state.name
+          log_group_name           = "${local.name_prefix}-la"
+          compartment_ids          = local.observation_compartment_ids
+          flow_compartment_id      = local.observation_compartment_id
+          log_group_compartment_id = var.compartment_ocid
+          flow_log_group_id        = local.flow_log_group_id
+          flow_log_id              = local.flow_log_id
+          flow_vcn_id              = local.observed_vcn_id
+        }))
       }))
     },
     var.ssh_public_key == "" ? {} : { ssh_authorized_keys = var.ssh_public_key },

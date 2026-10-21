@@ -33,3 +33,40 @@ class WidgetStatusTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_validation_query_uses_explicit_compartment_and_subtree():
+    from unittest.mock import Mock
+    import oci
+    from oci_zpr_visibility.validate_dashboards import _count_rows
+    la = Mock()
+    la.query.return_value.data.total_count = 1
+    _count_rows(la, 'namespace', oci.log_analytics.models,
+                {'tenancy': 'root', 'query_compartment': 'destination'}, None, '*')
+    details = la.query.call_args.kwargs['query_details']
+    assert details.compartment_id == 'destination'
+    assert details.compartment_id_in_subtree is True
+
+
+def test_family_zero_requires_complete_zero_coverage():
+    w = {'resource_families': ['instance'], 'allow_zero': True}
+    assert _widget_status(0, w, True, {'instance': {'coverage_status': 'COLLECTED', 'eligible_count': '0'}}) == 'ZERO_ALLOWED'
+    for status in ('PARTIAL', 'NOT_COLLECTED'):
+        assert _widget_status(0, w, True, {'instance': {'coverage_status': status, 'eligible_count': 0}}) == 'UNAVAILABLE'
+    assert _widget_status(0, w, True, {'instance': {'coverage_status': 'collected', 'eligible_count': '0'}}) == 'ZERO_ALLOWED'
+    assert _widget_status(0, w, True, {}) == 'UNAVAILABLE'
+    assert _widget_status(0, w, True, {'instance': {'coverage_status': 'COLLECTED', 'eligible_count': 9}}) == 'ZERO'
+
+
+def test_exact_log_group_is_sent_as_provider_scope_filter():
+    from unittest.mock import Mock
+    import oci
+    from oci_zpr_visibility.validate_dashboards import _count_rows
+    la = Mock()
+    la.query.return_value.data.total_count = 0
+    _count_rows(la, 'namespace', oci.log_analytics.models,
+                {'tenancy': 'root', 'query_compartment': 'destination', 'query_log_group': 'expected-group'}, None, '*')
+    filters = la.query.call_args.kwargs['query_details'].scope_filters
+    assert len(filters) == 1
+    assert filters[0].field_name == 'Log Group'
+    assert filters[0].values == ['expected-group']

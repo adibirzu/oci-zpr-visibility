@@ -11,13 +11,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import re
 import sys
 
 import oci
 
 from . import dashboard as dash_mod
-from .logutil import describe_exception
 
 DISPLAY_NAME = "OCI ZPR Visibility"
 DASHBOARD_ID = "oci-zpr-visibility"
@@ -79,11 +79,17 @@ def _scope_filters(compartment_id: str) -> dict:
     }
 
 
-def _saved_search(search_id, widget, compartment_id) -> dict:
+def _saved_search(search_id, widget, compartment_id, log_group_id=None) -> dict:
     vt = widget["visualization_type"]
+    query = widget["query"]
+    if log_group_id:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", log_group_id):
+            raise ValueError("invalid log-group identifier")
+        search, separator, commands = query.partition("|")
+        query = search.rstrip() + f" and 'Log Group' = '{log_group_id}' " + separator + commands
     ui = {
         "enableWidgetInApp": True,
-        "queryString": widget["query"],
+        "queryString": query,
         "scopeFilters": _scope_filters(compartment_id),
         "showTitle": True,
         "timeSelection": DEFAULT_TIME_PERIOD,
@@ -123,6 +129,7 @@ def build_management_dashboard(
     display_name: str = DISPLAY_NAME,
     *,
     tab: dict | None = None,
+    log_group_id: str | None = None,
 ) -> dict:
     """Pure builder: dashboard descriptor -> Management Dashboard import JSON."""
     widgets = list(tab.get("widgets", [])) if tab else dash_mod.iter_widgets(dash)
@@ -148,7 +155,7 @@ def build_management_dashboard(
                 "time": "$(dashboard.params.time)",
             },
         })
-        saved.append(_saved_search(sid, w, compartment_id))
+        saved.append(_saved_search(sid, w, compartment_id, log_group_id))
     return {
         "dashboardId": DASHBOARD_ID if tab is None else f"{DASHBOARD_ID}-{_slug(tab['name'])}",
         "providerId": "log-analytics",
@@ -181,7 +188,7 @@ def build_management_dashboard(
     }
 
 
-def build_management_dashboards(dash: dict, compartment_id: str) -> list[dict]:
+def build_management_dashboards(dash: dict, compartment_id: str, *, log_group_id: str | None = None) -> list[dict]:
     """Build one focused OCI dashboard per logical visibility view."""
     built: list[dict] = []
     for index, tab in enumerate(dash.get("tabs", [])):
@@ -192,9 +199,50 @@ def build_management_dashboards(dash: dict, compartment_id: str) -> list[dict]:
                 compartment_id,
                 display_name=display_name,
                 tab=tab,
+                log_group_id=log_group_id,
             )
         )
     return built
+
+
+def prepare_dashboard_imports(md, built: list[dict], compartment_id: str) -> list[tuple[dict, str | None]]:
+    """Resolve owned dashboards and search IDs before any write; never delete."""
+    plans = []
+    for candidate in built:
+        item = copy.deepcopy(candidate)
+        matches = oci.pagination.list_call_get_all_results(
+            md.list_management_dashboards, compartment_id=compartment_id,
+            display_name=item["displayName"],
+        ).data
+        if len(matches) > 1:
+            raise ValueError("ambiguous dashboard name; no dashboards imported")
+        etag = None
+        if matches:
+            current = md.get_management_dashboard(matches[0].dashboard_id)
+            existing = current.data
+            if (existing.freeform_tags or {}).get("platform") != "oci-zpr-visibility":
+                raise ValueError("same-name dashboard is not owned by this project")
+            etag = current.headers.get("etag")
+            if not etag:
+                raise ValueError("dashboard has no concurrency token; no dashboards imported")
+            item["dashboardId"] = existing.dashboard_id
+            item["freeformTags"] = {**(existing.freeform_tags or {}), **item["freeformTags"]}
+            if existing.defined_tags:
+                item["definedTags"] = existing.defined_tags
+            searches = {}
+            for search in existing.saved_searches or []:
+                if search.display_name in searches:
+                    raise ValueError("ambiguous saved search name; no dashboards imported")
+                searches[search.display_name] = search.id
+            remapped = {}
+            for search in item["savedSearches"]:
+                if search["displayName"] in searches:
+                    remapped[search["id"]] = searches[search["displayName"]]
+                    search["id"] = remapped[search["id"]]
+            for tile in item["tiles"]:
+                tile["savedSearchId"] = remapped.get(tile["savedSearchId"], tile["savedSearchId"])
+        plans.append((item, etag))
+    return plans
 
 
 def main(argv=None) -> int:
@@ -204,6 +252,8 @@ def main(argv=None) -> int:
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--region", default=None)
     p.add_argument("--compartment-id", default=None, help="defaults to the tenancy OCID")
+    p.add_argument("--log-group-id", default=None, help="Bind every widget to this destination log group")
+    p.add_argument("--log-group-name", default="zpr-visibility-la", help="Resolve this group in the dashboard compartment when no ID is supplied")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--quiet", action="store_true", help="suppress target identifiers from output")
     args = p.parse_args(argv)
@@ -217,7 +267,23 @@ def main(argv=None) -> int:
     if errors:
         print("dashboard descriptor invalid:", *errors, sep="\n  ", file=sys.stderr)
         return 2
-    built = build_management_dashboards(dash, compartment_id)
+    la = client(session, "log_analytics.LogAnalyticsClient")
+    ns = client(session, "object_storage.ObjectStorageClient").get_namespace().data
+    if args.log_group_id:
+        group = la.get_log_analytics_log_group(ns, args.log_group_id).data
+        if group.compartment_id != compartment_id:
+            raise ValueError("log group does not belong to the dashboard compartment")
+        group_id = group.id
+    else:
+        groups = oci.pagination.list_call_get_all_results(
+            la.list_log_analytics_log_groups, namespace_name=ns,
+            compartment_id=compartment_id, limit=200,
+        ).data
+        matches = [g for g in groups if g.display_name == args.log_group_name]
+        if len(matches) != 1:
+            raise ValueError("expected exactly one destination log group; provide --log-group-id")
+        group_id = matches[0].id
+    built = build_management_dashboards(dash, compartment_id, log_group_id=group_id)
     if not args.quiet:
         print(f"dashboard suite: {len(built)} focused dashboards / "
               f"{sum(len(item['tiles']) for item in built)} tiles")
@@ -230,20 +296,12 @@ def main(argv=None) -> int:
         return 0
 
     md = client(session, "management_dashboard.DashxApisClient")
-    # idempotent: delete any existing same-name dashboard first
-    try:
-        for item in built:
-            for d in md.list_management_dashboards(
-                compartment_id=compartment_id, display_name=item["displayName"]
-            ).data.items:
-                md.delete_management_dashboard(d.dashboard_id)
-                if not args.quiet:
-                    print(f"  replaced existing dashboard: {item['displayName']}")
-    except oci.exceptions.ServiceError as exc:
-        if not args.quiet:
-            print(f"  (list/delete skipped: {describe_exception(exc)})")
-    details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=built)
-    md.import_dashboard(details)
+    # Import updates existing IDs and creates missing views. Read failures and
+    # concurrent edits stop the operation instead of deleting or duplicating.
+    plans = prepare_dashboard_imports(md, built, compartment_id)
+    for item, etag in plans:
+        details = oci.management_dashboard.models.ManagementDashboardImportDetails(dashboards=[item])
+        md.import_dashboard(details, **({"if_match": etag} if etag else {}))
     if not args.quiet:
         print(f"imported dashboard suite: {len(built)} dashboards")
     return 0

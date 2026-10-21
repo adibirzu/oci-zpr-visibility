@@ -3,8 +3,10 @@
 Environment: verified OCI target; tenant, profile, region, namespace, resource
 names, addresses, and identifiers are intentionally omitted.
 Last run: 2026-08-03. No live identifiers are stored in this repository.
+This is historical acceptance of the earlier source. The estate/ORM extensions
+require new current-run ingestion and native dashboard acceptance.
 
-## Summary — current live acceptance
+## Summary — historical live acceptance
 
 | Stage | Method | Result |
 |-------|--------|--------|

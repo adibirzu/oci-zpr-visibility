@@ -1,20 +1,28 @@
 #!/bin/bash
-set -x
+set -eu
 exec > /var/log/zpr-controller.log 2>&1
 dnf install -y python3.11 python3.11-pip || yum install -y python311 python311-pip
-PIP=$(command -v pip3.11 || command -v pip3)
-$PIP install --upgrade pip oci
+mkdir -p /opt/zpr
+python3.11 -m venv /opt/zpr/venv
+PIP=/opt/zpr/venv/bin/pip
+cat >/opt/zpr/bootstrap-requirements.txt <<'REQUIREMENTS'
+${bootstrap_requirements}
+REQUIREMENTS
+$PIP install --only-binary=:all: --require-hashes -r /opt/zpr/bootstrap-requirements.txt
 
 # Download the collector package via instance principal (retry until IAM propagates).
-python3.11 - <<'PY'
-import oci, time, sys
+/opt/zpr/venv/bin/python - <<'PY'
+import hashlib, oci, time, sys
 signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
 osc = oci.object_storage.ObjectStorageClient({}, signer=signer)
 for attempt in range(40):
     try:
         ns = osc.get_namespace().data
         obj = osc.get_object(ns, "${pkg_bucket}", "${pkg_object}")
-        open("/tmp/pkg.tgz", "wb").write(obj.data.content)
+        payload = obj.data.content
+        if hashlib.sha256(payload).hexdigest() != "${pkg_sha256}":
+            sys.exit("Collector package digest mismatch; refusing extraction")
+        open("/tmp/pkg.tgz", "wb").write(payload)
         print("downloaded package"); sys.exit(0)
     except Exception as e:
         print("waiting for instance principal/policy:", str(e)[:120]); time.sleep(20)
@@ -22,20 +30,49 @@ sys.exit(1)
 PY
 
 mkdir -p /tmp/pkg && tar xzf /tmp/pkg.tgz -C /tmp/pkg
-$PIP install /tmp/pkg
-BIN=$(command -v oci-zpr-visibility || echo /usr/local/bin/oci-zpr-visibility)
+$PIP install --no-index --no-deps /tmp/pkg/*.whl
+BIN=/opt/zpr/venv/bin/oci-zpr-visibility
 # log_analytics/ isn't packaged; point the dashboard builder at the extracted copy.
 export OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
 
-# Provision LA content, deploy the dashboard, and run the first refresh — all via
-# instance principal (no API keys on the box).
-$BIN provision-la --auth instance_principal --region ${region} --log-group-name ${log_group_name}
-$BIN deploy-dashboard --auth instance_principal --region ${region}
-$BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} || true
+# Keep scope and optional flow arguments in an executable wrapper; cron does not
+# preserve shell arrays. JSON values are parsed as data, never sourced/evaluated.
+cat >/usr/local/bin/zpr-refresh <<'WRAPPER'
+#!/opt/zpr/venv/bin/python
+import base64
+import json
+from oci_zpr_visibility import refresh
+config = json.loads(base64.b64decode("${refresh_config_b64}"))
+scopes = config.get("compartment_ids")
+if not isinstance(scopes, list) or not scopes or any(not isinstance(cid, str) or not cid.strip() for cid in scopes):
+    raise SystemExit("Refusing refresh without a non-empty explicit collection scope")
+args = ["--auth", "instance_principal", "--region", config["region"],
+        "--state-bucket", config["state_bucket"], "--log-group-name", config["log_group_name"], "--quiet"]
+if config.get("log_group_compartment_id"):
+    args += ["--log-group-compartment-id", config["log_group_compartment_id"]]
+for cid in scopes:
+    args += ["--collection-compartment-id", cid]
+if config["flow_log_group_id"] and config["flow_log_id"]:
+    args += ["--flow-log-compartment-id", config["flow_compartment_id"],
+             "--flow-log-group-id", config["flow_log_group_id"],
+             "--flow-log-id", config["flow_log_id"],
+             "--flow-vcn-id", config["flow_vcn_id"]]
+raise SystemExit(refresh.main(args))
+WRAPPER
+chmod 0755 /usr/local/bin/zpr-refresh
 
-# Keep refreshing every 15 minutes via cron (with flow correlation for traffic KPIs).
+# Install recovery before provider calls: transient first-run failures must not
+# leave the controller without a scheduler. flock prevents overlapping uploads.
 cat >/etc/cron.d/zpr-refresh <<CRON
 OCI_ZPR_DASHBOARD_PATH=/tmp/pkg/log_analytics/dashboards/oci_zpr_visibility_dashboard.json
-*/15 * * * * root $BIN refresh --auth instance_principal --region ${region} --state-bucket ${state_bucket} --flow-log-compartment-id ${flow_compartment_id} --flow-log-group-id ${flow_log_group_id} --flow-log-id ${flow_log_id} >> /var/log/zpr-refresh.log 2>&1
+*/15 * * * * root /usr/bin/flock -n /var/lock/zpr-refresh.lock /usr/local/bin/zpr-refresh >> /var/log/zpr-refresh.log 2>&1
 CRON
+systemctl enable --now crond
+
+# Provision LA content, deploy the dashboard, and run the first refresh — all via
+# instance principal (no API keys on the box).
+$BIN provision-la --auth instance_principal --region ${region} --log-group-name ${log_group_name} --log-group-compartment-id ${log_group_compartment_id}
+$BIN deploy-dashboard --auth instance_principal --region ${region} --compartment-id ${dashboard_compartment_id} --log-group-name ${log_group_name}
+/usr/bin/flock -n /var/lock/zpr-refresh.lock /usr/local/bin/zpr-refresh
+
 echo "ZPR controller bootstrap complete"
